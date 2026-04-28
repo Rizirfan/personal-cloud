@@ -1,0 +1,30 @@
+{
+  "name": "multi-drive",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tejasmmali/Multi-Drive.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/tejasmmali/Multi-Drive/issues"
+  },
+  "homepage": "https://github.com/tejasmmali/Multi-Drive#readme",
+  "dependencies": {
+    "axios": "^1.14.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.1",
+    "express": "^5.2.1",
+    "megajs": "^1.3.10",
+    "multer": "^2.1.1"
+  }
+}

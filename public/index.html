@@ -1,0 +1,3601 @@
+<!DOCTYPE html>
+<html>
+  
+<head>
+  <title>MultiDrive</title>
+  <link rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20,500,0,0">
+  <link rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&family=Sora:wght@600;700;800&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap">
+
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial;
+      background: #0f172a;
+      color: white;
+      display: flex;
+      height: 100vh;
+    }
+
+
+    .sidebar {
+      width: 250px;
+      background: #020617;
+      padding: 20px;
+      border-right: 1px solid #1e293b;
+    }
+
+    .sidebar h2 {
+      margin-bottom: 20px;
+    }
+
+    .account {
+      padding: 10px;
+      background: #1e293b;
+      border-radius: 8px;
+      margin-bottom: 10px;
+    }
+
+    .addBtn {
+      width: 100%;
+      padding: 10px;
+      background: #22c55e;
+      border: none;
+      border-radius: 6px;
+      color: white;
+      cursor: pointer;
+      margin-bottom: 20px;
+    }
+
+
+    .main {
+      flex: 1;
+      padding: 30px;
+    }
+
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 24px;
+      align-items: stretch;
+    }
+
+
+    .card {
+      background: #1e293b;
+      padding: 20px;
+      border-radius: 12px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .cardHeader {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+
+    .avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: #ef4444;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+    }
+
+    .email {
+      font-size: 14px;
+    }
+
+    .progressBar {
+      height: 8px;
+      background: #334155;
+      border-radius: 6px;
+      overflow: hidden;
+      margin: 10px 0;
+    }
+
+    .progressFill {
+      height: 100%;
+      background: #22c55e;
+    }
+
+
+    .storageText {
+      font-size: 13px;
+      margin-bottom: 10px;
+    }
+
+
+    .storageBreakdown .row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      margin: 6px 0;
+    }
+
+    .browseBtn {
+      margin-top: 10px;
+      width: 100%;
+      padding: 8px;
+      background: #3b82f6;
+      border: none;
+      border-radius: 6px;
+      color: white;
+      cursor: pointer;
+    }
+
+    .account {
+      padding: 8px;
+      background: #1e293b;
+      border-radius: 6px;
+      margin-bottom: 6px;
+      font-size: 13px;
+    }
+
+
+    .fill {
+      height: 100%;
+      background: #22c55e;
+    }
+
+    :root {
+      --bg: #fbfbfb;
+      --card: #ffffff;
+      --text: #111111;
+      --muted: #6b7280;
+      --border: #111111;
+      --radius: 14px;
+      --font-ui: "Manrope", "Segoe UI", Roboto, Arial, sans-serif;
+      --font-display: "Sora", "Manrope", "Segoe UI", Roboto, Arial, sans-serif;
+    }
+
+    body.darkMode {
+      --bg: #0a111f;
+      --card: #121a2b;
+      --text: #eef4ff;
+      --muted: #a8b5cc;
+      --border: #3a4c68;
+
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      display: block;
+      height: auto;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-ui);
+    }
+
+    input,
+    select,
+    button {
+      font-family: var(--font-ui);
+    }
+
+    body.darkMode {
+      background: var(--bg);
+    }
+
+    .page {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 22px 16px 60px;
+    }
+
+    .themeSwitchWrap {
+      position: fixed;
+      top: 12px;
+      right: 14px;
+      z-index: 1300;
+      display: inline-flex;
+    }
+
+    .themeSwitchBtn {
+      width: 44px;
+      height: 44px;
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      background: var(--card);
+      color: var(--text);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      padding: 0;
+    }
+
+    .themeSwitchBtn:hover {
+      background: var(--border);
+      color: #fff;
+    }
+
+    .themeSwitchBtn:focus-visible {
+      outline: 2px solid #2563eb;
+      outline-offset: 2px;
+    }
+
+    .themeSwitchIcon {
+      font-family: "Material Symbols Rounded";
+      font-weight: normal;
+      font-style: normal;
+      font-size: 22px;
+      line-height: 1;
+      letter-spacing: normal;
+      text-transform: none;
+      white-space: nowrap;
+      direction: ltr;
+      display: inline-block;
+      font-variation-settings:
+        "FILL" 0,
+        "wght" 500,
+        "GRAD" 0,
+        "opsz" 20;
+    }
+
+    @media (max-width: 640px) {
+      .themeSwitchWrap {
+        top: 8px;
+        right: 8px;
+      }
+
+      .themeSwitchBtn {
+        width: 40px;
+        height: 40px;
+      }
+    }
+
+    body.darkMode .homeSearchInput,
+    body.darkMode .searchClearBtn,
+    body.darkMode .searchSuggest,
+    body.darkMode .searchSuggestItem,
+    body.darkMode .searchResults,
+    body.darkMode .progressBar {
+      background: rgba(16, 24, 42, 0.46);
+    }
+
+    body.darkMode .homeSearchInput,
+    body.darkMode .searchClearBtn,
+    body.darkMode .homeSearchBtn {
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+
+    body.darkMode .homeSearchInput {
+      color: var(--text);
+    }
+
+    body.darkMode .homeSearchInput::placeholder {
+      color: #8fa1bf;
+    }
+
+    body.darkMode .homeSearchLeadIcon {
+      color: #9fb2d3;
+    }
+
+    body.darkMode .searchSuggestItem {
+      border-bottom-color: #1f2937;
+    }
+
+    body.darkMode .searchSuggestItem:hover {
+      background: #1a2540;
+    }
+
+    body.darkMode .searchClearBtn {
+      border-color: #4e6287;
+      color: #9fb2d3;
+    }
+
+    body.darkMode .searchTable th,
+    body.darkMode .searchTable td {
+      border-bottom-color: #2a3a55;
+      color: var(--text);
+    }
+
+    body.darkMode .searchLink {
+      color: #8cbcff;
+    }
+
+    body.darkMode .modal {
+      background: var(--card);
+      border-color: #4a5f84;
+    }
+
+    body.darkMode .modalHead,
+    body.darkMode .modalBody {
+      background: var(--card);
+    }
+
+    body.darkMode .modalClose {
+      border-color: rgba(203, 213, 225, 0.35);
+      background: rgba(16, 25, 43, 0.72);
+      color: var(--text);
+    }
+
+    body.darkMode .sidebar,
+    body.darkMode .homeSearch,
+    body.darkMode .card {
+      box-shadow: none;
+    }
+
+    body.darkMode .searchState {
+      border-color: #4a5f84;
+    }
+
+    body.darkMode .uploadOption,
+    body.darkMode .uploadAccountSelect,
+    body.darkMode .uploadChoiceBtn,
+    body.darkMode .megaLoginInput,
+    body.darkMode .megaLoginBtn,
+    body.darkMode .providerOptionBtn {
+      background: #10182a;
+      border-color: #4a5f84;
+      color: var(--text);
+    }
+
+    body.darkMode .uploadChoiceBtn:hover,
+    body.darkMode .megaLoginBtn:hover,
+    body.darkMode .providerOptionBtn:hover {
+      background: #243452;
+    }
+
+    body.darkMode .fileTable th {
+      background: rgba(16, 24, 43, 0.86);
+      color: var(--text);
+      border-bottom-color: #2d3f5f;
+    }
+
+    body.darkMode .fileTable td {
+      border-bottom-color: #2a3a55;
+    }
+
+    body.darkMode .fileTable tr:hover td {
+      background: rgba(24, 36, 60, 0.72);
+    }
+
+    body.darkMode .browseNav {
+      border-bottom-color: #2d3f5f;
+      background: rgba(13, 20, 35, 0.66);
+    }
+
+    body.darkMode .browseNavBtn {
+      border-color: #4a5f84;
+      background: rgba(16, 25, 43, 0.74);
+      color: var(--text);
+    }
+
+    body.darkMode .browseNavBtn:hover {
+      background: rgba(25, 37, 62, 0.92);
+    }
+
+    body.darkMode .browseNavBtn.active {
+      background: rgba(79, 102, 145, 0.32);
+    }
+
+    body.darkMode .fileMime,
+    body.darkMode .homeSearchHint,
+    body.darkMode .accountSectionTitle,
+    body.darkMode .accountEmpty,
+    body.darkMode .modalSub,
+    body.darkMode .providerOptionSub,
+    body.darkMode .uploadOption p,
+    body.darkMode .uploadChoiceStatus,
+    body.darkMode .megaLoginStatus {
+      color: var(--muted);
+    }
+
+    body.darkMode .fileContextMenu {
+      background: var(--card);
+      border-color: rgba(120, 145, 188, 0.35);
+    }
+
+    body.darkMode .fileContextBtn {
+      color: var(--text);
+    }
+
+    body.darkMode .fileContextBtn:hover {
+      background: rgba(35, 50, 82, 0.8);
+    }
+
+    body.darkMode .ctxHint {
+      color: #b8c8e3;
+    }
+
+    body.darkMode .ctxSeparator {
+      background: rgba(120, 145, 188, 0.32);
+    }
+
+    .layout {
+      display: flex;
+      align-items: flex-start;
+      gap: 18px;
+    }
+
+    .sidebar {
+      width: 280px;
+      flex: 0 0 280px;
+      background: var(--card);
+      border: 2px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px;
+    }
+
+    .sidebar h2 {
+      margin: 2px 0 12px;
+      font-size: 14px;
+      font-weight: 900;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      font-family: var(--font-display);
+    }
+
+    .addBtn {
+      width: 100%;
+      min-height: 42px;
+      padding: 10px 14px;
+      border: 2px solid var(--border);
+      background: var(--card);
+      color: var(--text);
+      border-radius: 12px;
+      cursor: pointer;
+      margin-bottom: 14px;
+      font-weight: 900;
+      font-family: var(--font-display);
+    }
+
+    .addBtn:hover {
+      background: var(--border);
+      color: #fff;
+    }
+
+    .account {
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 12px;
+      margin-bottom: 10px;
+      font-size: 13px;
+      font-weight: 800;
+      background: var(--card);
+    }
+
+    .accountSectionTitle {
+      margin: 12px 0 8px;
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .accountSectionIcon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 15px;
+      height: 15px;
+      flex: 0 0 auto;
+    }
+
+    .accountSectionIcon img {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    body.darkMode .accountSectionIcon img {
+      filter: invert(1);
+    }
+
+    .accountEmpty {
+      margin: 0 0 10px;
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--muted);
+    }
+
+    .main {
+      flex: 1;
+      min-width: 0;
+      padding-top: 2px;
+    }
+
+    .greeting {
+      margin: 0 0 16px;
+      font-size: 26px;
+      font-weight: 900;
+      letter-spacing: -0.02em;
+      font-family: var(--font-display);
+    }
+
+    .subtitle {
+      margin: 0 0 20px;
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .homeSearch {
+      background: var(--card);
+      border: 3px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px;
+      margin: 0 0 18px;
+      position: relative;
+    }
+
+    .homeSearchRow {
+      display: flex;
+      gap: 10px;
+    }
+
+    .homeSearchInputWrap {
+      position: relative;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .homeSearchLeadIcon {
+      position: absolute;
+      top: 50%;
+      left: 10px;
+      transform: translateY(-50%);
+      width: 20px;
+      height: 20px;
+      color: #64748b;
+      pointer-events: none;
+      font-family: "Material Symbols Rounded";
+      font-weight: normal;
+      font-style: normal;
+      font-size: 20px;
+      line-height: 1;
+      letter-spacing: normal;
+      text-transform: none;
+      white-space: nowrap;
+      direction: ltr;
+      display: inline-block;
+      font-variation-settings:
+        "FILL" 0,
+        "wght" 500,
+        "GRAD" 0,
+        "opsz" 20;
+    }
+
+    .homeSearchInput {
+      width: 100%;
+      padding: 10px 12px;
+      padding-left: 36px;
+      padding-right: 34px;
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 700;
+      background: #fff;
+      color: var(--text);
+    }
+
+    .searchClearBtn {
+      position: absolute;
+      top: 50%;
+      right: 8px;
+      transform: translateY(-50%);
+      width: 22px;
+      height: 22px;
+      border: 1px solid #9ca3af;
+      border-radius: 9999px;
+      background: #fff;
+      color: #6b7280;
+      font-size: 0;
+      line-height: 0;
+      padding: 0;
+      cursor: pointer;
+      display: none;
+    }
+
+    .searchClearBtn.show {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .searchClearBtn::before {
+      content: "close";
+      font-family: "Material Symbols Rounded";
+      font-weight: normal;
+      font-style: normal;
+      font-size: 16px;
+      line-height: 1;
+      letter-spacing: normal;
+      text-transform: none;
+      white-space: nowrap;
+      direction: ltr;
+      display: inline-block;
+      font-variation-settings:
+        "FILL" 0,
+        "wght" 500,
+        "GRAD" 0,
+        "opsz" 20;
+    }
+
+    .searchClearBtn:hover {
+      border-color: var(--border);
+      color: var(--text);
+    }
+
+    .homeSearchBtn {
+      min-height: 42px;
+      padding: 10px 14px;
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      background: var(--card);
+      color: var(--text);
+      font-weight: 900;
+      cursor: pointer;
+      font-family: var(--font-display);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .homeSearchBtn::before {
+      content: "search";
+      font-family: "Material Symbols Rounded";
+      font-weight: normal;
+      font-style: normal;
+      font-size: 18px;
+      line-height: 1;
+      letter-spacing: normal;
+      text-transform: none;
+      white-space: nowrap;
+      direction: ltr;
+      display: inline-block;
+      font-variation-settings:
+        "FILL" 0,
+        "wght" 500,
+        "GRAD" 0,
+        "opsz" 20;
+    }
+
+    .homeSearchBtn:hover {
+      background: var(--border);
+      color: #fff;
+    }
+
+    .homeSearchHint {
+      margin: 10px 2px 0;
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .searchStateConnect {
+      text-align: center;
+    }
+
+    .searchStateConnectImg {
+      display: block;
+      width: 210px;
+      max-width: 100%;
+      height: auto;
+      margin: 12px auto 0;
+    }
+
+    body.darkMode .searchStateConnectImg,
+    body.darkMode .emptyStateImg {
+      filter: invert(1);
+    }
+
+    .searchStateConnectText {
+      margin: 10px 0 0;
+      font-size: 32px;
+      line-height: 1;
+      font-weight: 400;
+      font-family: "Patrick Hand", "Comic Sans MS", cursive;
+      color: var(--text);
+    }
+
+    .searchResults {
+      margin-top: 14px;
+      height: auto;
+      overflow: visible;
+    }
+
+    .searchResults.filled {
+      height: clamp(260px, 38vh, 380px);
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+
+    .searchSuggest {
+      margin-top: 0;
+      border: 2px solid var(--border);
+      border-style: dashed;
+      border-top: 0;
+      border-radius: 0 0 12px 12px;
+      background: rgba(255, 255, 255, 0.52);
+      overflow: hidden;
+      box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      position: absolute;
+      left: 14px;
+      right: 14px;
+      top: calc(14px + 44px);
+      z-index: 40;
+    }
+
+    .searchSuggestItem {
+      width: 100%;
+      text-align: left;
+      padding: 10px 12px;
+      padding-left: 40px;
+      border: none;
+      border-bottom: 1px solid #e5e7eb;
+      background: transparent;
+      color: var(--text);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 800;
+      position: relative;
+      display: block;
+    }
+
+    .searchSuggestItem::before {
+      content: "search";
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-family: "Material Symbols Rounded";
+      font-weight: normal;
+      font-style: normal;
+      font-size: 18px;
+      line-height: 1;
+      letter-spacing: normal;
+      text-transform: none;
+      white-space: nowrap;
+      direction: ltr;
+      display: inline-block;
+      color: var(--muted);
+      font-variation-settings:
+        "FILL" 0,
+        "wght" 500,
+        "GRAD" 0,
+        "opsz" 20;
+    }
+
+    .searchSuggestItem:last-child {
+      border-bottom: none;
+    }
+
+    .searchSuggestItem.history::before {
+      content: "history";
+    }
+
+    .searchSuggestItem:hover {
+      background: rgba(17, 17, 17, 0.06);
+    }
+
+    body.darkMode .searchSuggest {
+      background: rgba(16, 24, 42, 0.58);
+      border-color: #4a5f84;
+      box-shadow: none;
+    }
+
+    body.darkMode .searchSuggestItem {
+      border-bottom-color: #2a3a55;
+    }
+
+    body.darkMode .searchSuggestItem:hover {
+      background: rgba(56, 78, 118, 0.32);
+    }
+
+    .searchState {
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--muted);
+    }
+
+    .searchTable {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+
+    .searchTable th,
+    .searchTable td {
+      text-align: left;
+      padding: 10px;
+      border-bottom: 1px solid #e5e7eb;
+      font-size: 13px;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .searchTable thead th {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .searchTable th:nth-child(1),
+    .searchSkeletonTable th:nth-child(1) {
+      width: 27%;
+    }
+
+    .searchTable th:nth-child(2),
+    .searchSkeletonTable th:nth-child(2) {
+      width: 24%;
+    }
+
+    .searchTable th:nth-child(3),
+    .searchSkeletonTable th:nth-child(3) {
+      width: 20%;
+    }
+
+    .searchTable th:nth-child(4),
+    .searchSkeletonTable th:nth-child(4) {
+      width: 10%;
+    }
+
+    .searchTable th:nth-child(5),
+    .searchSkeletonTable th:nth-child(5) {
+      width: 19%;
+    }
+
+    .searchTable tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    .searchLink {
+      color: #2563eb;
+      text-decoration: none;
+      font-weight: 800;
+    }
+
+    .searchLink:hover {
+      text-decoration: underline;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+      gap: 16px;
+      align-items: stretch;
+    }
+
+    .card {
+      background: var(--card);
+      border: 4px solid var(--border);
+      padding: 16px;
+      border-radius: var(--radius);
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .card:hover {
+      border-style: dashed;
+    }
+
+    .cardHeader {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .cardHeaderMain {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .logoutBtn {
+      width: 36px;
+      height: 36px;
+      border: 2px solid #ef4444;
+      border-radius: 10px;
+      background: rgba(239, 68, 68, 0.1);
+      color: #dc2626;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex: 0 0 auto;
+      transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    }
+
+    .logoutBtn:hover {
+      border-color: #dc2626;
+      background: rgba(239, 68, 68, 0.22);
+      color: #b91c1c;
+    }
+
+    .logoutBtn svg {
+      width: 18px;
+      height: 18px;
+      fill: currentColor;
+    }
+
+    .logoutIcon {
+      font-family: "Material Symbols Rounded";
+      font-weight: normal;
+      font-style: normal;
+      font-size: 18px;
+      line-height: 1;
+      letter-spacing: normal;
+      text-transform: none;
+      white-space: nowrap;
+      direction: ltr;
+      display: inline-block;
+      font-variation-settings:
+        "FILL" 0,
+        "wght" 500,
+        "GRAD" 0,
+        "opsz" 20;
+    }
+
+    .avatar {
+      width: 42px;
+      height: 42px;
+      border-radius: 9999px;
+      background: var(--border);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 900;
+      border: 2px solid var(--border);
+      flex: 0 0 auto;
+      overflow: hidden;
+    }
+
+    .avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .avatarFallback {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .email {
+      font-size: 13px;
+      font-weight: 900;
+      margin-top: 2px;
+      word-break: break-word;
+    }
+
+    .progressBar {
+      height: 10px;
+      border: 2px solid var(--border);
+      border-radius: 9999px;
+      overflow: hidden;
+      margin: 10px 0 12px;
+      background: var(--card);
+    }
+
+    .progressFill {
+      height: 100%;
+      background: #22c55e;
+    }
+
+    .storageText {
+      font-size: 12px;
+      margin-bottom: 10px;
+      font-weight: 700;
+    }
+
+    .storageBreakdown .row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      margin: 6px 0;
+      font-weight: 800;
+    }
+
+    .storageMetric {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .storageMetricIcon {
+      font-family: "Material Symbols Rounded";
+      font-weight: normal;
+      font-style: normal;
+      font-size: 18px;
+      line-height: 1;
+      letter-spacing: normal;
+      text-transform: none;
+      white-space: nowrap;
+      direction: ltr;
+      display: inline-block;
+      font-variation-settings:
+        "FILL" 0,
+        "wght" 500,
+        "GRAD" 0,
+        "opsz" 20;
+    }
+
+    @media (max-width: 900px) {
+      .layout {
+        flex-direction: column;
+      }
+
+      .sidebar {
+        width: 100%;
+        flex-basis: auto;
+      }
+    }
+
+    .browseBtn {
+      margin-top: 12px;
+      width: 100%;
+      min-height: 42px;
+      padding: 10px 14px;
+      border: 2px solid var(--border);
+      background: var(--card);
+      color: var(--text);
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: 900;
+      font-size: 13px;
+      font-family: var(--font-display);
+    }
+
+    .browseBtn:hover {
+      background: var(--border);
+      color: #fff;
+    }
+
+    .modalOverlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      background: rgba(15, 23, 42, 0.32);
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      box-sizing: border-box;
+    }
+
+    .modalOverlay.open {
+      display: flex;
+    }
+
+    .modal {
+      box-sizing: border-box;
+      width: 720px;
+      max-width: calc(100vw - 32px);
+      height: 600px;
+      max-height: calc(100vh - 48px);
+      background: var(--card);
+      border: 2px solid rgba(17, 17, 17, 0.35);
+      border-radius: var(--radius);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    .modalHead {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid rgba(17, 17, 17, 0.22);
+      background: var(--card);
+      flex-shrink: 0;
+    }
+
+    .modalTitle {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 900;
+      letter-spacing: -0.02em;
+      font-family: var(--font-display);
+    }
+
+    .modalSub {
+      margin: 4px 0 0;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--muted);
+      word-break: break-all;
+    }
+
+    .modalClose {
+      min-height: 36px;
+      padding: 8px 14px;
+      border: 2px solid rgba(17, 17, 17, 0.35);
+      border-radius: 9999px;
+      background: rgba(255, 255, 255, 0.55);
+      cursor: pointer;
+      font-weight: 900;
+      font-size: 12px;
+      flex-shrink: 0;
+      transition: background 0.15s ease, border-style 0.15s ease, box-shadow 0.15s ease;
+      font-family: var(--font-display);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modalClose:hover {
+      border-style: dashed;
+      background: rgba(255, 255, 255, 0.75);
+      color: var(--text);
+      box-shadow: inset 0 1px 5px rgba(17, 17, 17, 0.2);
+    }
+
+    .modalBody {
+      padding: 0;
+      overflow: auto;
+      flex: 1;
+      min-height: 0;
+      background: var(--card);
+    }
+
+    .fileContextMenu {
+      position: fixed;
+      z-index: 1200;
+      min-width: 232px;
+      padding: 8px;
+      background: var(--card);
+      border: 1px solid rgba(17, 17, 17, 0.3);
+      border-radius: 14px;
+      overflow: hidden;
+    }
+
+    .fileContextBtn {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      padding: 9px 10px;
+      border: none;
+      border-radius: 9px;
+      
+      background: transparent;
+      text-align: left;
+      font-size: 13px;
+      font-weight: 700;
+      color: #111827;
+      cursor: pointer;
+    }
+
+    .fileContextBtn+.fileContextBtn {
+      margin-top: 2px;
+    }
+
+    .fileContextBtn:hover {
+      background: rgba(255, 255, 255, 0.26);
+    }
+
+    .fileContextBtn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .fileContextBtn:disabled:hover {
+      background: transparent;
+    }
+
+    .ctxBtnMain {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .ctxIcon {
+      width: 20px;
+      text-align: center;
+      font-size: 20px;
+      line-height: 1;
+      font-family: "Material Symbols Rounded";
+      font-weight: normal;
+      font-style: normal;
+      display: inline-block;
+      letter-spacing: normal;
+      text-transform: none;
+      white-space: nowrap;
+      direction: ltr;
+      font-variation-settings:
+        "FILL" 0,
+        "wght" 500,
+        "GRAD" 0,
+        "opsz" 20;
+    }
+
+    .ctxHint {
+      font-size: 11px;
+      color: #6b7280;
+      font-weight: 700;
+    }
+
+    .ctxSeparator {
+      height: 1px;
+      margin: 6px 4px;
+      background: rgba(255, 255, 255, 0.34);
+    }
+
+    .fileContextBtn.delete {
+      color: #b91c1c;
+    }
+
+    .fileTable {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    .fileTable th,
+    .fileTable td {
+      padding: 10px 14px;
+      text-align: left;
+      border-bottom: 1px solid #e5e7eb;
+      vertical-align: middle;
+    }
+
+    .fileTable th {
+      font-weight: 900;
+      background: rgba(255, 255, 255, 0.5);
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
+
+    .fileTable tr:hover td {
+      background: rgba(255, 255, 255, 0.48);
+    }
+
+    .fileNameCell {
+      font-weight: 800;
+      max-width: 280px;
+    }
+
+    .fileNameCell a {
+      color: var(--text);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+
+    .browseNav {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      border-bottom: 1px solid rgba(17, 17, 17, 0.12);
+      background: rgba(255, 255, 255, 0.3);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .browseNavBtn {
+      padding: 6px 10px;
+      border: 1px solid rgba(17, 17, 17, 0.28);
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.55);
+      cursor: pointer;
+      font-weight: 900;
+      font-size: 12px;
+    }
+
+    .browseNavBtn:hover {
+      border-style: dashed;
+      background: rgba(255, 255, 255, 0.75);
+      color: var(--text);
+    }
+
+    .browseNavBtn.active {
+      background: rgba(17, 17, 17, 0.14);
+      color: var(--text);
+
+
+    }
+
+    .browseBreadcrumb {
+      padding: 8px 16px 12px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .bcSep {
+      margin: 0 6px;
+      color: var(--muted);
+    }
+
+    .bcPart {
+      background: none;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+      font: inherit;
+      font-weight: 900;
+      color: var(--text);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+    .bcPart:hover {
+      color: var(--muted);
+    }
+
+    .bcCurrent {
+      font-weight: 900;
+      color: var(--text);
+    }
+
+    .folderLink {
+      background: none;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+      font: inherit;
+      font-weight: 800;
+      color: var(--text);
+      text-align: left;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+    .folderLink:hover {
+      color: var(--muted);
+    }
+
+
+    .browseRowName {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .browseRowName .iconCell {
+      flex: 0 0 auto;
+      width: 22px;
+      height: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .browseRowName .iconCell svg {
+      width: 20px;
+      height: 20px;
+      display: block;
+    }
+
+    .browseRowName .namePart {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .browseRowName .folderLink {
+      max-width: 100%;
+    }
+
+
+
+    .fileMime {
+      color: var(--muted);
+      font-weight: 700;
+      max-width: 160px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .fileSize {
+      white-space: nowrap;
+      font-weight: 700;
+    }
+
+    
+
+    .modalLoading,
+    .modalError {
+      padding: 24px 16px;
+      text-align: center;
+      font-weight: 800;
+      color: var(--muted);
+    }
+
+    .modalError {
+      color: #b91c1c;
+    }
+
+    .skeletonWave {
+      display: block;
+      border-radius: 9999px;
+      background: linear-gradient(90deg, rgba(148, 163, 184, 0.24) 0%, rgba(148, 163, 184, 0.45) 50%, rgba(148, 163, 184, 0.24) 100%);
+      background-size: 220% 100%;
+      animation: skeletonShimmer 1.15s linear infinite;
+    }
+
+    @keyframes skeletonShimmer {
+      0% {
+        background-position: 200% 0;
+      }
+
+      100% {
+        background-position: -20% 0;
+      }
+    }
+
+    .sidebarSkeleton {
+      display: grid;
+      gap: 10px;
+    }
+
+    .sidebarSkeletonLine {
+      height: 34px;
+      border-radius: 12px;
+    }
+
+    .cardSkeleton {
+      min-height: 0;
+      pointer-events: none;
+    }
+
+    .cardSkeletonHead {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .cardSkeletonAvatar {
+      width: 42px;
+      height: 42px;
+      border-radius: 9999px;
+    }
+
+    .cardSkeletonAvatarWrap {
+      width: 42px;
+      height: 42px;
+      flex: 0 0 auto;
+    }
+
+    .cardSkeletonLine {
+      height: 11px;
+      margin-bottom: 8px;
+    }
+
+    .cardSkeletonLine:last-child {
+      margin-bottom: 0;
+    }
+
+    .cardSkeletonEmail {
+      width: 150px;
+    }
+
+    .cardSkeletonProvider {
+      width: 94px;
+    }
+
+    .cardSkeletonBar {
+      height: 10px;
+      margin: 10px 0 12px;
+      width: 100%;
+    }
+
+    .cardSkeletonMid {
+      width: 76%;
+    }
+
+    .cardSkeletonShort {
+      width: 48%;
+    }
+
+    .cardSkeletonBtn {
+      height: 42px;
+      width: 100%;
+      margin-top: 12px;
+    }
+
+    .searchSkeletonTable {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+
+    .searchSkeletonTable th,
+    .searchSkeletonTable td {
+      text-align: left;
+      padding: 10px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .searchSkeletonTable thead th {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      font-weight: 900;
+    }
+
+    .searchSkeletonTable tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    body.darkMode .searchSkeletonTable th,
+    body.darkMode .searchSkeletonTable td {
+      border-bottom-color: #2a3a55;
+    }
+
+    .searchSkeletonCell {
+      height: 11px;
+    }
+
+    .browseSkeletonTable {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .browseSkeletonTable th,
+    .browseSkeletonTable td {
+      padding: 10px 14px;
+      border-bottom: 1px solid rgba(17, 17, 17, 0.08);
+    }
+
+    body.darkMode .browseSkeletonTable th,
+    body.darkMode .browseSkeletonTable td {
+      border-bottom-color: #22324e;
+    }
+
+    .emptyStateImg {
+      display: block;
+      width: 320px;
+      max-width: 80%;
+      height: auto;
+      margin: 14px auto 0;
+      opacity: 0.9;
+    }
+
+    .homeDropOverlay {
+      position: fixed;
+      inset: 18px;
+      border: 2px dashed rgba(255, 255, 255, 0.84);
+      border-radius: 16px;
+      background: rgba(2, 6, 23, 0.22);
+      z-index: 1250;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+    }
+
+    .homeDropOverlay.show {
+      display: flex;
+    }
+
+    .homeDropOverlayText {
+      color: #ffffff;
+      font-size: 20px;
+      font-weight: 900;
+      letter-spacing: 0.01em;
+    }
+
+    .uploadChoiceModal {
+      width: min(560px, calc(100vw - 24px));
+    }
+
+    .uploadChoiceBody {
+      padding: 18px 16px 16px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .uploadOption {
+      border: 1px solid rgba(17, 17, 17, 0.2);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.62);
+      padding: 12px;
+    }
+
+    .uploadOption h3 {
+      margin: 0 0 8px;
+      font-size: 13px;
+      font-weight: 900;
+      font-family: var(--font-display);
+    }
+
+    .uploadOption p {
+      margin: 0 0 10px;
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .uploadChoiceRow {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .uploadAccountSelect {
+      min-width: 220px;
+      padding: 8px 10px;
+      border: 1px solid rgba(17, 17, 17, 0.28);
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.85);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .uploadChoiceBtn {
+      border: 1px solid rgba(17, 17, 17, 0.25);
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.72);
+      min-height: 40px;
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: 900;
+      cursor: pointer;
+      font-family: var(--font-display);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .uploadChoiceBtn:hover {
+      background: rgba(255, 255, 255, 0.9);
+    }
+
+    .uploadChoiceStatus {
+      margin: 0;
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--muted);
+    }
+
+    .connectModal {
+      width: 460px;
+      max-width: calc(100vw - 32px);
+      height: auto;
+      max-height: none;
+    }
+
+    .connectProviderBody {
+      padding: 16px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .providerOptionBtn {
+      width: 100%;
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      background: var(--card);
+      color: var(--text);
+      cursor: pointer;
+      text-align: left;
+      padding: 12px;
+      transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+    }
+
+    .providerOptionBtn:hover {
+      background: var(--border);
+      color: #fff;
+      transform: translateY(-1px);
+    }
+
+    .providerOptionMain {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      font-weight: 900;
+      font-family: var(--font-display);
+    }
+
+    .providerLogo {
+      width: 22px;
+      height: 22px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 auto;
+    }
+
+    .providerLogo svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .providerOptionIcon {
+      font-family: "Material Symbols Rounded";
+      font-weight: normal;
+      font-style: normal;
+      font-size: 20px;
+      line-height: 1;
+      font-variation-settings:
+        "FILL" 0,
+        "wght" 500,
+        "GRAD" 0,
+        "opsz" 20;
+    }
+
+    .providerOptionSub {
+      margin: 4px 0 0 30px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--muted);
+    }
+
+    .providerOptionBtn:hover .providerOptionSub {
+      color: rgba(255, 255, 255, 0.85);
+    }
+
+    .megaLoginModal {
+      width: 480px;
+      max-width: calc(100vw - 32px);
+      height: auto;
+      max-height: calc(100vh - 48px);
+    }
+
+    .megaLoginBody {
+      padding: 16px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .megaLoginLabel {
+      margin: 0;
+      font-size: 12px;
+      font-weight: 900;
+      color: var(--text);
+    }
+
+    .megaLoginInput {
+      width: 100%;
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      background: var(--card);
+      color: var(--text);
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .megaLoginActions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 4px;
+    }
+
+    .megaLoginBtn {
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      min-height: 40px;
+      padding: 9px 12px;
+      background: var(--card);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 900;
+      font-family: var(--font-display);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .megaLoginBtn:hover {
+      background: var(--border);
+      color: #fff;
+    }
+
+    .megaLoginStatus {
+      margin: 2px 0 0;
+      min-height: 18px;
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--muted);
+    }
+
+    .megaLoginStatus.error {
+      color: #b91c1c;
+    }
+
+    .namePromptModal {
+      width: 440px;
+      max-width: calc(100vw - 32px);
+      height: auto;
+      max-height: none;
+    }
+
+    .namePromptBody {
+      padding: 16px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .namePromptLabel {
+      margin: 0;
+      font-size: 12px;
+      font-weight: 900;
+      color: var(--text);
+    }
+
+    .namePromptInput {
+      width: 100%;
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      background: var(--card);
+      color: var(--text);
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .namePromptBtn {
+      min-height: 40px;
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      padding: 9px 12px;
+      background: var(--card);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 900;
+      font-family: var(--font-display);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .namePromptBtn:hover {
+      background: var(--border);
+      color: #fff;
+    }
+  </style>
+
+</head>
+
+<body>
+  <div class="page">
+    <div class="themeSwitchWrap">
+      <button type="button" class="themeSwitchBtn" id="themeSwitchBtn" aria-label="Switch to dark mode" title="Switch to dark mode">
+        <span class="themeSwitchIcon" id="themeSwitchIcon" aria-hidden="true">dark_mode</span>
+      </button>
+    </div>
+
+    <div class="layout">
+
+      <aside class="sidebar">
+
+        <h2>Accounts</h2>
+
+        <button class="addBtn" onclick="connectDrive()">+ Add Account (Google / MEGA)</button>
+
+        <div id="accounts"></div>
+
+      </aside>
+
+      <main class="main">
+
+        <h1 class="greeting" id="greeting">Storage Dashboard</h1>
+        <p class="subtitle">Connect multiple cloud accounts and see all storage usage in one place.</p>
+
+        <section class="homeSearch" aria-label="Search connected cloud accounts">
+          <div class="homeSearchRow">
+            <div class="homeSearchInputWrap">
+              <span class="homeSearchLeadIcon" aria-hidden="true">search</span>
+              <input id="globalSearchInput" class="homeSearchInput" type="text"
+                placeholder="Search all connected cloud accounts..." aria-label="Search all connected cloud accounts"
+                autocomplete="off">
+              <button type="button" class="searchClearBtn" id="globalSearchClearBtn"
+                aria-label="Clear search">×</button>
+            </div>
+            <button type="button" class="homeSearchBtn" id="globalSearchBtn">Search</button>
+          </div>
+          <div class="searchSuggest" id="globalSearchSuggest" style="display:none;"></div>
+          <p class="homeSearchHint" id="globalSearchHint">Type a file or folder name to search across every connected
+            account.</p>
+          <div class="searchResults" id="globalSearchResults"></div>
+        </section>
+
+        <div class="grid" id="cards"></div>
+
+      </main>
+
+    </div>
+
+  </div>
+
+  <div class="modalOverlay" id="browseModal" role="dialog" aria-modal="true" aria-labelledby="browseModalTitle"
+    aria-hidden="true">
+    <div class="modal">
+      <div class="modalHead">
+        <div>
+          <h2 class="modalTitle" id="browseModalTitle">Cloud files</h2>
+          <p class="modalSub" id="browseModalEmail"></p>
+        </div>
+        <button type="button" class="modalClose" onclick="closeBrowseModal()">Close</button>
+      </div>
+      <div class="modalBody" id="browseModalBody"></div>
+    </div>
+  </div>
+  <div id="fileContextMenu" class="fileContextMenu" style="display:none;" aria-hidden="true">
+    <button type="button" class="fileContextBtn" id="fileContextCutBtn">
+      <span class="ctxBtnMain"><span class="ctxIcon">content_cut</span><span>Cut</span></span>
+      <span class="ctxHint">Ctrl+X</span>
+    </button>
+    <button type="button" class="fileContextBtn" id="fileContextCopyBtn">
+      <span class="ctxBtnMain"><span class="ctxIcon">content_copy</span><span>Copy</span></span>
+      <span class="ctxHint">Ctrl+C</span>
+    </button>
+    <button type="button" class="fileContextBtn" id="fileContextPasteBtn">
+      <span class="ctxBtnMain"><span class="ctxIcon">content_paste</span><span>Paste</span></span>
+      <span class="ctxHint">Ctrl+V</span>
+    </button>
+    <div class="ctxSeparator"></div>
+    <button type="button" class="fileContextBtn" id="fileContextMoveBtn">
+      <span class="ctxBtnMain"><span class="ctxIcon">drive_file_move</span><span>Move to...</span></span>
+      <span class="ctxHint"></span>
+    </button>
+    <button type="button" class="fileContextBtn delete" id="fileContextDeleteBtn">
+      <span class="ctxBtnMain"><span class="ctxIcon">delete</span><span>Delete</span></span>
+      <span class="ctxHint">Del</span>
+    </button>
+  </div>
+  <div id="homeDropOverlay" class="homeDropOverlay" aria-hidden="true">
+    <div class="homeDropOverlayText">Drop here to upload</div>
+  </div>
+  <div class="modalOverlay" id="homeUploadChoiceModal" role="dialog" aria-modal="true"
+    aria-labelledby="homeUploadChoiceTitle" aria-hidden="true">
+    <div class="modal uploadChoiceModal">
+      <div class="modalHead">
+        <div>
+          <h2 class="modalTitle" id="homeUploadChoiceTitle">Upload dropped files</h2>
+          <p class="modalSub" id="homeUploadChoiceSub">Choose where to upload your file(s).</p>
+        </div>
+        <button type="button" class="modalClose" id="homeUploadChoiceCloseBtn">Close</button>
+      </div>
+      <div class="uploadChoiceBody">
+        <div class="uploadOption">
+          <h3>1) Select account</h3>
+          <p>Choose the account manually.</p>
+          <div class="uploadChoiceRow">
+            <select id="homeUploadAccountSelect" class="uploadAccountSelect"></select>
+            <button type="button" class="uploadChoiceBtn" id="homeUploadSelectBtn">Upload to selected</button>
+          </div>
+        </div>
+        <div class="uploadOption">
+          <h3>2) Auto select</h3>
+          <p>Automatically picks the best account after storage calculation.</p>
+          <div class="uploadChoiceRow">
+            <button type="button" class="uploadChoiceBtn" id="homeUploadAutoBtn">Auto select and upload</button>
+          </div>
+        </div>
+        <p class="uploadChoiceStatus" id="homeUploadChoiceStatus"></p>
+      </div>
+    </div>
+  </div>
+  <div class="modalOverlay" id="connectProviderModal" role="dialog" aria-modal="true"
+    aria-labelledby="connectProviderTitle" aria-hidden="true">
+    <div class="modal connectModal">
+      <div class="modalHead">
+        <div>
+          <h2 class="modalTitle" id="connectProviderTitle">Connect account</h2>
+          <p class="modalSub">Select the provider you want to connect.</p>
+        </div>
+        <button type="button" class="modalClose" id="connectProviderCloseBtn">Close</button>
+      </div>
+      <div class="connectProviderBody">
+        <button type="button" class="providerOptionBtn" id="connectGoogleBtn">
+          <span class="providerOptionMain"><span class="providerLogo" aria-hidden="true"><svg viewBox="0 0 24 24"
+                xmlns="http://www.w3.org/2000/svg">
+                <path fill="#EA4335"
+                  d="M12.2 10.1v4h5.7c-.2 1.3-.8 2.3-1.7 3.1l3 2.3c1.7-1.6 2.8-4 2.8-7 0-.7-.1-1.4-.2-2h-9.6z" />
+                <path fill="#34A853"
+                  d="M6.5 14.3l-.7.6-2.5 2c1.5 3 4.7 5.1 8.7 5.1 2.6 0 4.8-.8 6.4-2.3l-3-2.3c-.8.6-1.9 1-3.4 1-2.6 0-4.8-1.8-5.6-4.1z" />
+                <path fill="#FBBC05"
+                  d="M3.3 7.1C2.8 8.1 2.5 9.3 2.5 10.6s.3 2.5.8 3.5c0 0 3.2-2.6 3.2-2.6.2-1 .2-1.4 0-2.4l-3.2-2z" />
+                <path fill="#4285F4"
+                  d="M12 4.4c1.8 0 3.3.6 4.5 1.8l2.7-2.7C17.5 2 15 1 12 1 8 1 4.8 3.2 3.3 6.1l3.2 2.5c.8-2.3 3-4.2 5.5-4.2z" />
+              </svg></span><span>Google Drive</span></span>
+          <p class="providerOptionSub">Sign in with Google OAuth and access your Drive files.</p>
+        </button>
+        <button type="button" class="providerOptionBtn" id="connectMegaBtn">
+          <span class="providerOptionMain"><span class="providerLogo" aria-hidden="true"><svg viewBox="0 0 24 24"
+                xmlns="http://www.w3.org/2000/svg">
+                <circle cx="12" cy="12" r="11" fill="#D9272E" />
+                <path d="M6.4 16.8V7.3h2.1l3.6 5.2 3.6-5.2h2.1v9.5h-2V10.6l-3.1 4.5h-1.1l-3.1-4.5v6.2h-2.1z"
+                  fill="#fff" />
+              </svg></span><span>MEGA</span></span>
+          <p class="providerOptionSub">Use your MEGA login flow and connect your encrypted storage.</p>
+        </button>
+      </div>
+    </div>
+  </div>
+  <div class="modalOverlay" id="megaLoginModal" role="dialog" aria-modal="true" aria-labelledby="megaLoginTitle"
+    aria-hidden="true">
+    <div class="modal megaLoginModal">
+      <div class="modalHead">
+        <div>
+          <h2 class="modalTitle" id="megaLoginTitle">Sign in to MEGA</h2>
+          <p class="modalSub">Connect your MEGA account without leaving the dashboard.</p>
+        </div>
+        <button type="button" class="modalClose" id="megaLoginCloseBtn">Close</button>
+      </div>
+      <form class="megaLoginBody" id="megaLoginForm">
+        <label class="megaLoginLabel" for="megaEmailInput">MEGA Email</label>
+        <input class="megaLoginInput" id="megaEmailInput" name="email" type="email" required autocomplete="username">
+
+        <label class="megaLoginLabel" for="megaPasswordInput">Password</label>
+        <input class="megaLoginInput" id="megaPasswordInput" name="password" type="password" required
+          autocomplete="current-password">
+
+        <label class="megaLoginLabel" for="mega2faInput">2FA Code (optional)</label>
+        <input class="megaLoginInput" id="mega2faInput" name="secondFactorCode" type="text" inputmode="numeric"
+          autocomplete="one-time-code" placeholder="Only if your MEGA account uses 2FA">
+
+        <div class="megaLoginActions">
+          <button type="submit" class="megaLoginBtn" id="megaLoginSubmitBtn">Connect MEGA</button>
+          <button type="button" class="megaLoginBtn" id="megaTokenSubmitBtn">Use Saved Token</button>
+        </div>
+        <p class="megaLoginStatus" id="megaLoginStatus"></p>
+      </form>
+    </div>
+  </div>
+  <div class="modalOverlay" id="namePromptModal" role="dialog" aria-modal="true" aria-labelledby="namePromptTitle"
+    aria-hidden="true">
+    <div class="modal namePromptModal">
+      <div class="modalHead">
+        <div>
+          <h2 class="modalTitle" id="namePromptTitle">Welcome</h2>
+          <p class="modalSub">Tell us your name for your dashboard greeting.</p>
+        </div>
+      </div>
+      <form class="namePromptBody" id="namePromptForm">
+        <label class="namePromptLabel" for="namePromptInput">Your name</label>
+        <input class="namePromptInput" id="namePromptInput" name="name" type="text" maxlength="40" required
+          autocomplete="name" placeholder="Enter your name">
+        <button type="submit" class="namePromptBtn">Continue</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const THEME_STORAGE_KEY = "multidrive-theme"
+    const USER_NAME_STORAGE_KEY = "multidrive-user-name"
+    const SEARCH_HISTORY_STORAGE_KEY = "multidrive-search-history"
+    const SEARCH_HISTORY_MAX = 7
+
+    function getSearchHistory() {
+      try {
+        const raw = localStorage.getItem(SEARCH_HISTORY_STORAGE_KEY)
+        const parsed = JSON.parse(raw || "[]")
+        if (!Array.isArray(parsed)) return []
+        return parsed.map(item => String(item || "").trim()).filter(Boolean).slice(0, SEARCH_HISTORY_MAX)
+      } catch (e) {
+        return []
+      }
+    }
+
+    function saveSearchHistoryTerm(term) {
+      const value = String(term || "").trim()
+      if (!value) return
+      const next = [value, ...getSearchHistory().filter(item => item.toLowerCase() !== value.toLowerCase())].slice(0, SEARCH_HISTORY_MAX)
+      localStorage.setItem(SEARCH_HISTORY_STORAGE_KEY, JSON.stringify(next))
+    }
+
+    function connectDrive() {
+      openConnectProviderModal()
+    }
+
+    function openConnectProviderModal() {
+      const modal = document.getElementById("connectProviderModal")
+      if (!modal) return
+      modal.classList.add("open")
+      modal.setAttribute("aria-hidden", "false")
+      const firstBtn = document.getElementById("connectGoogleBtn")
+      if (firstBtn) {
+        window.setTimeout(() => firstBtn.focus(), 0)
+      }
+    }
+
+    function closeConnectProviderModal() {
+      const modal = document.getElementById("connectProviderModal")
+      if (!modal) return
+      modal.classList.remove("open")
+      modal.setAttribute("aria-hidden", "true")
+    }
+
+    function connectProvider(provider) {
+      if (normalizeProvider(provider) === "mega") {
+        closeConnectProviderModal()
+        openMegaLoginModal()
+        return
+      }
+      const route = "/auth/google"
+      const isHttpOrigin = /^https?:$/i.test(window.location.protocol || "")
+      const appOrigin = isHttpOrigin ? window.location.origin : "http://localhost:3000"
+      window.location.href = new URL(route, appOrigin).href
+    }
+
+    function openMegaLoginModal() {
+      const modal = document.getElementById("megaLoginModal")
+      const statusEl = document.getElementById("megaLoginStatus")
+      if (!modal) return
+      if (statusEl) {
+        statusEl.textContent = ""
+        statusEl.classList.remove("error")
+      }
+      modal.classList.add("open")
+      modal.setAttribute("aria-hidden", "false")
+      const emailInput = document.getElementById("megaEmailInput")
+      if (emailInput) {
+        window.setTimeout(() => emailInput.focus(), 0)
+      }
+    }
+
+    function closeMegaLoginModal() {
+      const modal = document.getElementById("megaLoginModal")
+      if (!modal) return
+      modal.classList.remove("open")
+      modal.setAttribute("aria-hidden", "true")
+    }
+
+    function setMegaLoginStatus(message, isError) {
+      const statusEl = document.getElementById("megaLoginStatus")
+      if (!statusEl) return
+      statusEl.textContent = message || ""
+      statusEl.classList.toggle("error", !!isError)
+    }
+
+    async function submitMegaLoginForm(ev) {
+      if (ev) ev.preventDefault()
+      const form = document.getElementById("megaLoginForm")
+      if (!form) return
+
+      const email = String(form.email?.value || "").trim()
+      const password = String(form.password?.value || "")
+      const secondFactorCode = String(form.secondFactorCode?.value || "").trim()
+      if (!email || !password) {
+        setMegaLoginStatus("Email and password are required.", true)
+        return
+      }
+
+      const submitBtn = document.getElementById("megaLoginSubmitBtn")
+      if (submitBtn) submitBtn.disabled = true
+      setMegaLoginStatus("Connecting MEGA account...", false)
+
+      try {
+        const res = await fetch("/auth/mega/login-json", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password, secondFactorCode })
+        })
+        const payload = await res.json()
+        if (!res.ok) {
+          const msg = payload && payload.error ? payload.error : "Unable to login to MEGA"
+          setMegaLoginStatus(msg, true)
+          return
+        }
+        setMegaLoginStatus("MEGA account connected.", false)
+        await loadStorage()
+        window.setTimeout(() => {
+          closeMegaLoginModal()
+          form.reset()
+        }, 300)
+      } catch (e) {
+        setMegaLoginStatus("Connection failed. Please try again.", true)
+      } finally {
+        if (submitBtn) submitBtn.disabled = false
+      }
+    }
+
+    async function connectMegaWithSavedToken() {
+      const tokenBtn = document.getElementById("megaTokenSubmitBtn")
+      if (tokenBtn) tokenBtn.disabled = true
+      setMegaLoginStatus("Connecting saved MEGA token...", false)
+      try {
+        const res = await fetch("/auth/mega/token-json", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" }
+        })
+        const payload = await res.json()
+        if (!res.ok) {
+          const msg = payload && payload.error ? payload.error : "Unable to connect MEGA token"
+          setMegaLoginStatus(msg, true)
+          return
+        }
+        setMegaLoginStatus("MEGA token connected.", false)
+        await loadStorage()
+        window.setTimeout(closeMegaLoginModal, 300)
+      } catch (e) {
+        setMegaLoginStatus("Connection failed. Please try again.", true)
+      } finally {
+        if (tokenBtn) tokenBtn.disabled = false
+      }
+    }
+
+    function applyTheme(theme) {
+      const useDark = theme === "dark"
+      document.body.classList.toggle("darkMode", useDark)
+      const btn = document.getElementById("themeSwitchBtn")
+      const icon = document.getElementById("themeSwitchIcon")
+      if (btn && icon) {
+        if (useDark) {
+          icon.textContent = "light_mode"
+          btn.setAttribute("aria-label", "Switch to light mode")
+          btn.setAttribute("title", "Switch to light mode")
+        } else {
+          icon.textContent = "dark_mode"
+          btn.setAttribute("aria-label", "Switch to dark mode")
+          btn.setAttribute("title", "Switch to dark mode")
+        }
+      }
+    }
+
+    function formatFileSize(bytes) {
+      if (bytes == null || bytes === "") return "—"
+      const n = Number(bytes)
+      if (!Number.isFinite(n) || n < 0) return "—"
+      const units = ["B", "KB", "MB", "GB", "TB"]
+      let v = n
+      let i = 0
+      while (v >= 1024 && i < units.length - 1) {
+        v /= 1024
+        i++
+      }
+
+
+      return (i === 0 ? Math.round(v) : v.toFixed(i >= 3 ? 2 : 1)) + " " + units[i]
+    }
+
+    function renderSidebarSkeleton(count) {
+      const total = Math.max(3, Number(count) || 5)
+      const rows = Array.from({ length: total }).map(() => {
+        return '<span class="skeletonWave sidebarSkeletonLine"></span>'
+      }).join("")
+      return '<div class="sidebarSkeleton">' + rows + "</div>"
+    }
+
+    function renderCardSkeletons(count) {
+      const total = Math.max(1, Number(count) || 4)
+      const cards = Array.from({ length: total }).map(() => {
+        return '<div class="card cardSkeleton">' +
+          '<div class="cardSkeletonHead">' +
+          '<div class="cardSkeletonAvatarWrap"><span class="skeletonWave cardSkeletonAvatar"></span></div>' +
+          '<div>' +
+          '<span class="skeletonWave cardSkeletonLine cardSkeletonEmail"></span>' +
+          '<span class="skeletonWave cardSkeletonLine cardSkeletonProvider"></span>' +
+          '</div>' +
+          "</div>" +
+          '<span class="skeletonWave cardSkeletonBar"></span>' +
+          '<span class="skeletonWave cardSkeletonLine cardSkeletonMid"></span>' +
+          '<span class="skeletonWave cardSkeletonLine cardSkeletonShort"></span>' +
+          '<span class="skeletonWave cardSkeletonLine cardSkeletonShort"></span>' +
+          '<span class="skeletonWave cardSkeletonLine cardSkeletonShort"></span>' +
+          '<span class="skeletonWave cardSkeletonBtn"></span>' +
+          "</div>"
+      }).join("")
+
+      return cards
+    }
+
+    function renderBrowseSkeleton(rowCount) {
+      const count = Math.max(4, Number(rowCount) || 8)
+      const rows = Array.from({ length: count }).map(() => {
+        return "<tr><td><span class=\"skeletonWave searchSkeletonCell\" style=\"width:58%;\"></span></td><td><span class=\"skeletonWave searchSkeletonCell\" style=\"width:72%;\"></span></td><td><span class=\"skeletonWave searchSkeletonCell\" style=\"width:56%;\"></span></td><td><span class=\"skeletonWave searchSkeletonCell\" style=\"width:82%;\"></span></td></tr>"
+      }).join("")
+      return "<table class=\"browseSkeletonTable\"><thead><tr><th>Name</th><th>Type</th><th>Size</th><th>Modified</th></tr></thead><tbody>" + rows + "</tbody></table>"
+    }
+
+    function renderSearchSkeleton(rowCount) {
+      const count = Math.max(4, Number(rowCount) || 6)
+      const rows = Array.from({ length: count }).map(() => {
+        return "<tr><td><span class=\"skeletonWave searchSkeletonCell\" style=\"width:64%;\"></span></td><td><span class=\"skeletonWave searchSkeletonCell\" style=\"width:78%;\"></span></td><td><span class=\"skeletonWave searchSkeletonCell\" style=\"width:52%;\"></span></td><td><span class=\"skeletonWave searchSkeletonCell\" style=\"width:44%;\"></span></td><td><span class=\"skeletonWave searchSkeletonCell\" style=\"width:66%;\"></span></td></tr>"
+      }).join("")
+      return '<table class="searchSkeletonTable"><thead><tr><th>Name</th><th>Account</th><th>Type</th><th>Size</th><th>Modified</th></tr></thead><tbody>' + rows + "</tbody></table>"
+    }
+
+    function escapeHtml(s) {
+      const d = document.createElement("div")
+      d.textContent = s
+      return d.innerHTML
+    }
+
+    function normalizeProvider(provider) {
+      return String(provider || "google").trim().toLowerCase() === "mega" ? "mega" : "google"
+    }
+
+    function providerName(provider) {
+      return normalizeProvider(provider) === "mega" ? "MEGA" : "Google Drive"
+    }
+
+    function normalizeUserName(value) {
+      return String(value || "").replace(/\s+/g, " ").trim()
+    }
+
+    function getSavedUserName() {
+      return normalizeUserName(localStorage.getItem(USER_NAME_STORAGE_KEY) || "")
+    }
+
+    function setGreetingFromSavedName() {
+      const greetingEl = document.getElementById("greeting")
+      if (!greetingEl) return
+      const savedName = getSavedUserName()
+      greetingEl.textContent = savedName ? ("hello, " + savedName) : "Storage Dashboard"
+    }
+
+    function openNamePromptModal() {
+      const modal = document.getElementById("namePromptModal")
+      if (!modal) return
+      modal.classList.add("open")
+      modal.setAttribute("aria-hidden", "false")
+      const input = document.getElementById("namePromptInput")
+      if (input) {
+        window.setTimeout(() => input.focus(), 0)
+      }
+    }
+
+    function closeNamePromptModal() {
+      const modal = document.getElementById("namePromptModal")
+      if (!modal) return
+      modal.classList.remove("open")
+      modal.setAttribute("aria-hidden", "true")
+    }
+
+    function initFirstVisitNamePrompt() {
+      setGreetingFromSavedName()
+      if (!getSavedUserName()) {
+        openNamePromptModal()
+      }
+    }
+
+    function submitNamePrompt(ev) {
+      if (ev) ev.preventDefault()
+      const form = document.getElementById("namePromptForm")
+      if (!form) return
+      const rawName = form.name ? form.name.value : ""
+      const name = normalizeUserName(rawName)
+      if (!name) {
+        const input = document.getElementById("namePromptInput")
+        if (input) input.focus()
+        return
+      }
+      localStorage.setItem(USER_NAME_STORAGE_KEY, name)
+      setGreetingFromSavedName()
+      closeNamePromptModal()
+    }
+
+    function getAccountDisplayName(account) {
+      const rawName = String(account && account.user && account.user.displayName ? account.user.displayName : "").trim()
+      if (!rawName) return ""
+      const name = rawName.toLowerCase()
+      if (name === "mega" || name === "google drive" || name === "google") {
+        return ""
+      }
+      return rawName
+    }
+
+    function getAccountFirstName(account) {
+      const givenName = String(account && account.user && account.user.givenName ? account.user.givenName : "").trim()
+      if (givenName) {
+        return givenName
+      }
+
+      const display = getAccountDisplayName(account)
+      if (display) {
+        return (display.split(/\s+/).find(Boolean) || "").trim()
+      }
+
+      const email = String(account && account.user && account.user.emailAddress ? account.user.emailAddress : "").trim()
+      if (!email || email.indexOf("@") === -1) {
+        return ""
+      }
+      const local = email.split("@")[0].replace(/[._+\-]+/g, " ").trim()
+      return (local.split(/\s+/).find(Boolean) || "").trim()
+    }
+
+    function makeAccountKey(email, provider) {
+      return normalizeProvider(provider) + "::" + String(email || "").trim().toLowerCase()
+    }
+
+    function parseAccountKey(key) {
+      const raw = String(key || "")
+      const idx = raw.indexOf("::")
+      if (idx === -1) {
+        return { provider: "google", email: raw.trim() }
+      }
+      return {
+        provider: normalizeProvider(raw.slice(0, idx)),
+        email: raw.slice(idx + 2).trim()
+      }
+    }
+
+    function closeBrowseModal() {
+      const el = document.getElementById("browseModal")
+      if (el) {
+        el.classList.remove("open")
+        el.setAttribute("aria-hidden", "true")
+      }
+    }
+
+    function openBrowseModal() {
+      const el = document.getElementById("browseModal")
+      if (el) {
+        el.classList.add("open")
+        el.setAttribute("aria-hidden", "false")
+      }
+    }
+
+    const FOLDER_MIME = "application/vnd.google-apps.folder"
+    let connectedAccountCount = 0
+    let searchSuggestTimer = null
+    let searchSuggestRequestId = 0
+    let allowSearchSuggestions = false
+    let homeAccounts = []
+    let homeDropFiles = []
+    let homeDragDepth = 0
+    let homeUploadInProgress = false
+
+    let browseEmail = ""
+    let browseProvider = "google"
+    let browsePath = []
+    let fileContextTarget = null
+    let driveClipboard = null
+
+    function goToMyDriveRoot() {
+      browsePath = [{ id: "root", name: "My Drive" }]
+      loadBrowseFolder()
+    }
+
+    function goToSharedDrivesList() {
+      browsePath = [{ id: "__shared_drives__", name: "Shared drives" }]
+      loadBrowseFolder()
+    }
+
+    function openBrowseFolder(id, name) {
+      browsePath.push({ id, name: name || "(folder)" })
+      loadBrowseFolder()
+    }
+
+    function closeFileContextMenu() {
+      const menu = document.getElementById("fileContextMenu")
+      if (!menu) return
+      menu.style.display = "none"
+      menu.setAttribute("aria-hidden", "true")
+      fileContextTarget = null
+    }
+
+    function openFileContextMenu(x, y, item) {
+      const menu = document.getElementById("fileContextMenu")
+      if (!menu) return
+      fileContextTarget = item
+      updateFileContextButtonsState()
+      menu.style.display = "block"
+      menu.setAttribute("aria-hidden", "false")
+
+      const maxLeft = window.innerWidth - menu.offsetWidth - 8
+      const maxTop = window.innerHeight - menu.offsetHeight - 8
+      const left = Math.max(8, Math.min(x, maxLeft))
+      const top = Math.max(8, Math.min(y, maxTop))
+
+      menu.style.left = left + "px"
+      menu.style.top = top + "px"
+    }
+
+    function getCurrentBrowseFolderId() {
+      const current = browsePath[browsePath.length - 1]
+      if (!current || !current.id || current.id === "__shared_drives__") {
+        return ""
+      }
+      return current.id
+    }
+
+    function updateFileContextButtonsState() {
+      const pasteBtn = document.getElementById("fileContextPasteBtn")
+      const moveBtn = document.getElementById("fileContextMoveBtn")
+      const deleteBtn = document.getElementById("fileContextDeleteBtn")
+      const hasTarget = !!(fileContextTarget && fileContextTarget.id)
+      const hasClipboard = !!(driveClipboard && driveClipboard.id && driveClipboard.email)
+
+      if (pasteBtn) {
+        pasteBtn.disabled = !hasClipboard || !getCurrentBrowseFolderId()
+      }
+      if (moveBtn) {
+        moveBtn.disabled = !hasTarget
+      }
+      if (deleteBtn) {
+        deleteBtn.disabled = !hasTarget
+      }
+    }
+
+    function stashClipboard(mode) {
+      if (!fileContextTarget || !fileContextTarget.id || !fileContextTarget.email) {
+        closeFileContextMenu()
+        return
+      }
+      driveClipboard = {
+        mode,
+        id: fileContextTarget.id,
+        name: fileContextTarget.name || "(unnamed)",
+        email: fileContextTarget.email,
+        provider: normalizeProvider(fileContextTarget.provider || browseProvider)
+      }
+      closeFileContextMenu()
+    }
+
+    function cutBrowseItemFromContext() {
+      stashClipboard("cut")
+    }
+
+    function copyBrowseItemFromContext() {
+      stashClipboard("copy")
+    }
+
+    async function pasteBrowseItemFromContext() {
+      if (!driveClipboard || !driveClipboard.id || !driveClipboard.email) {
+        closeFileContextMenu()
+        return
+      }
+      const destinationFolderId = getCurrentBrowseFolderId()
+      if (!destinationFolderId) {
+        alert("Open a destination folder first, then paste.")
+        closeFileContextMenu()
+        return
+      }
+
+      closeFileContextMenu()
+      const endpoint = driveClipboard.mode === "cut" ? "/move-item" : "/copy-item"
+
+      try {
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            email: driveClipboard.email,
+            provider: driveClipboard.provider,
+            fileId: driveClipboard.id,
+            destinationFolderId
+          })
+        })
+        const payload = await res.json()
+        if (!res.ok) {
+          const msg = payload && payload.error ? payload.error : "Unable to complete paste"
+          alert(msg)
+          return
+        }
+        if (driveClipboard.mode === "cut") {
+          driveClipboard = null
+        }
+        loadBrowseFolder()
+      } catch (e) {
+        alert("Paste failed. Please try again.")
+      }
+    }
+
+    async function moveBrowseItemFromContext() {
+      if (!fileContextTarget || !fileContextTarget.id || !fileContextTarget.email) {
+        closeFileContextMenu()
+        return
+      }
+
+      const destinationFolderId = (window.prompt("Enter destination folder ID:", "") || "").trim()
+      if (!destinationFolderId) {
+        closeFileContextMenu()
+        return
+      }
+      if (destinationFolderId === fileContextTarget.id) {
+        alert("Destination folder ID cannot be same as selected item ID.")
+        closeFileContextMenu()
+        return
+      }
+
+      closeFileContextMenu()
+      try {
+        const res = await fetch("/move-item", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            email: fileContextTarget.email,
+            provider: normalizeProvider(fileContextTarget.provider || browseProvider),
+            fileId: fileContextTarget.id,
+            destinationFolderId
+          })
+        })
+        const payload = await res.json()
+        if (!res.ok) {
+          const msg = payload && payload.error ? payload.error : "Unable to move item"
+          alert(msg)
+          return
+        }
+        loadBrowseFolder()
+      } catch (e) {
+        alert("Move failed. Please try again.")
+      }
+    }
+
+    async function deleteBrowseItemFromContext() {
+      if (!fileContextTarget) return
+
+      const email = fileContextTarget.email || browseEmail
+      const fileId = fileContextTarget.id
+      const itemName = fileContextTarget.name || "this item"
+
+      if (!email || !fileId) {
+        closeFileContextMenu()
+        return
+      }
+
+      const ok = window.confirm('Delete "' + itemName + '"? This cannot be undone.')
+      if (!ok) {
+        closeFileContextMenu()
+        return
+      }
+
+      closeFileContextMenu()
+
+      try {
+        const res = await fetch("/delete-item", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ email, provider: normalizeProvider(fileContextTarget.provider || browseProvider), fileId })
+        })
+        const payload = await res.json()
+
+        if (!res.ok) {
+          const msg = payload && payload.error ? payload.error : "Unable to delete item"
+          alert(msg)
+          return
+        }
+
+        loadBrowseFolder()
+      } catch (e) {
+        alert("Delete failed. Please try again.")
+      }
+    }
+
+    function renderBrowseBreadcrumb() {
+
+      const el = document.getElementById("browseBreadcrumb")
+      if (!el) return
+
+      const html = browsePath.map((seg, i) => {
+        const isLast = i === browsePath.length - 1
+        const label = escapeHtml(seg.name)
+        if (isLast) {
+          return '<span class="bcCurrent">' + label + "</span>"
+        }
+        return '<button type="button" class="bcPart" data-bcidx="' + i + '">' + label + "</button>"
+      }).join('<span class="bcSep">›</span>')
+
+      el.innerHTML = html
+
+
+      el.querySelectorAll(".bcPart").forEach(btn => {
+        btn.addEventListener("click", function () {
+          const idx = parseInt(btn.getAttribute("data-bcidx"), 10)
+          if (Number.isNaN(idx)) return
+          browsePath = browsePath.slice(0, idx + 1)
+          loadBrowseFolder()
+        })
+      })
+
+    }
+
+    function browseAccount(email, provider) {
+      if (!email) return
+      window.location.href = "/browse.html?email=" + encodeURIComponent(email) + "&provider=" + encodeURIComponent(normalizeProvider(provider))
+    }
+
+    function toBytes(value) {
+      const n = Number(value)
+      return Number.isFinite(n) && n >= 0 ? n : 0
+    }
+
+    function pickAutoUploadAccount() {
+      if (!Array.isArray(homeAccounts) || homeAccounts.length === 0) {
+        return null
+      }
+
+      const scored = homeAccounts.map(acc => {
+        const used = toBytes(acc?.storageQuota?.usage)
+        const limit = toBytes(acc?.storageQuota?.limit)
+        const free = limit > 0 ? Math.max(0, limit - used) : -1
+        const usedRatio = limit > 0 ? (used / limit) : Number.POSITIVE_INFINITY
+        return { acc, used, limit, free, usedRatio }
+      })
+
+      const withLimit = scored.filter(s => s.limit > 0)
+      if (withLimit.length > 0) {
+        withLimit.sort((a, b) => b.free - a.free)
+        return withLimit[0].acc
+      }
+
+      scored.sort((a, b) => a.usedRatio - b.usedRatio)
+      return scored[0].acc
+    }
+
+    function setHomeDropOverlay(show) {
+      const overlay = document.getElementById("homeDropOverlay")
+      if (!overlay) return
+      overlay.classList.toggle("show", !!show)
+      overlay.setAttribute("aria-hidden", show ? "false" : "true")
+    }
+
+    function openHomeUploadChoiceModal(files) {
+      const modal = document.getElementById("homeUploadChoiceModal")
+      const status = document.getElementById("homeUploadChoiceStatus")
+      const sub = document.getElementById("homeUploadChoiceSub")
+      const select = document.getElementById("homeUploadAccountSelect")
+      if (!modal || !status || !sub || !select) return
+
+      homeDropFiles = Array.from(files || [])
+      if (homeDropFiles.length === 0) {
+        return
+      }
+
+      if (connectedAccountCount === 0) {
+        alert("Connect at least one account before uploading.")
+        homeDropFiles = []
+        return
+      }
+
+      select.innerHTML = homeAccounts.map(acc => {
+        const email = acc?.user?.emailAddress || ""
+        if (!email) return ""
+        const provider = normalizeProvider(acc.provider)
+        const value = makeAccountKey(email, provider)
+        return '<option value="' + escapeHtml(value) + '">' + escapeHtml(providerName(provider) + " - " + email) + "</option>"
+      }).join("")
+      status.textContent = ""
+      sub.textContent = "Dropped " + homeDropFiles.length + " file(s). Choose where to upload."
+      modal.classList.add("open")
+      modal.setAttribute("aria-hidden", "false")
+    }
+
+    function closeHomeUploadChoiceModal() {
+      const modal = document.getElementById("homeUploadChoiceModal")
+      const status = document.getElementById("homeUploadChoiceStatus")
+      if (modal) {
+        modal.classList.remove("open")
+        modal.setAttribute("aria-hidden", "true")
+      }
+      if (status) {
+        status.textContent = ""
+      }
+      homeDropFiles = []
+      homeUploadInProgress = false
+    }
+
+    async function uploadDroppedFilesToAccount(accountKey) {
+      const status = document.getElementById("homeUploadChoiceStatus")
+      if (homeUploadInProgress) return
+      const selectedAccount = parseAccountKey(accountKey)
+      const email = selectedAccount.email
+      const provider = selectedAccount.provider
+      if (!email) {
+        if (status) status.textContent = "Choose an account first."
+        return
+      }
+      if (!Array.isArray(homeDropFiles) || homeDropFiles.length === 0) {
+        if (status) status.textContent = "No dropped files found."
+        return
+      }
+
+      homeUploadInProgress = true
+      if (status) {
+        status.textContent = "Uploading " + homeDropFiles.length + " file(s) to " + providerName(provider) + " - " + email + "..."
+      }
+
+      try {
+        for (const file of homeDropFiles) {
+          const form = new FormData()
+          form.append("email", email)
+          form.append("provider", provider)
+          form.append("parentId", "root")
+          form.append("file", file, file.name)
+
+          const res = await fetch("/upload-item", {
+            method: "POST",
+            body: form
+          })
+          const payload = await res.json()
+          if (!res.ok) {
+            const msg = payload && payload.error ? payload.error : "Upload failed"
+            throw new Error(msg)
+          }
+        }
+
+        if (status) status.textContent = "Upload complete."
+        await loadStorage()
+        window.setTimeout(closeHomeUploadChoiceModal, 450)
+      } catch (err) {
+        if (status) {
+          status.textContent = err && err.message ? err.message : "Upload failed. Please try again."
+        }
+        homeUploadInProgress = false
+      }
+    }
+
+    function hasDraggedFiles(ev) {
+      if (!ev || !ev.dataTransfer || !ev.dataTransfer.types) return false
+      return Array.from(ev.dataTransfer.types).includes("Files")
+    }
+
+    function handleHomeUploadSelectClick() {
+      const select = document.getElementById("homeUploadAccountSelect")
+      if (!select) return
+      uploadDroppedFilesToAccount((select.value || "").trim())
+    }
+
+    function handleHomeUploadAutoClick() {
+      const picked = pickAutoUploadAccount()
+      const email = picked && picked.user ? picked.user.emailAddress : ""
+      uploadDroppedFilesToAccount(email ? makeAccountKey(String(email), picked.provider) : "")
+    }
+
+    async function loadBrowseFolder() {
+
+      const body = document.getElementById("browseModalBody")
+      const emailEl = document.getElementById("browseModalEmail")
+
+      if (!body || !browseEmail) return
+
+      const parentSeg = browsePath[browsePath.length - 1]
+      const parentId = parentSeg ? parentSeg.id : "root"
+
+      body.innerHTML = renderBrowseSkeleton(8)
+      if (emailEl) emailEl.textContent = browseEmail
+
+      try {
+        const url = "/files?email=" + encodeURIComponent(browseEmail) + "&provider=" + encodeURIComponent(browseProvider) + "&parentId=" + encodeURIComponent(parentId)
+        const res = await fetch(url)
+        const payload = await res.json()
+
+        if (!res.ok) {
+          const err = payload && payload.error ? payload.error : "Could not load folder"
+          body.innerHTML = '<div class="modalError">' + escapeHtml(String(err)) + "</div>"
+          return
+        }
+
+        const items = Array.isArray(payload.items) ? payload.items : []
+
+        const inMyDriveBranch = browsePath.length > 0 && browsePath[0].id === "root"
+        const inSharedBranch = browsePath.length > 0 && browsePath[0].id === "__shared_drives__"
+
+        const nav = normalizeProvider(browseProvider) === "mega"
+          ? '<div class="browseBreadcrumb" id="browseBreadcrumb"></div>'
+          : '<div class="browseNav">' +
+          '<button type="button" class="browseNavBtn' + (inMyDriveBranch ? " active" : "") + '" data-nav="my">My Drive</button>' +
+          '<button type="button" class="browseNavBtn' + (inSharedBranch ? " active" : "") + '" data-nav="shared">Shared drives</button>' +
+          "</div>" +
+          '<div class="browseBreadcrumb" id="browseBreadcrumb"></div>'
+
+        if (items.length === 0) {
+          const emptyHint = parentId === "root"
+            ? "<p style=\"margin:8px 0 0;font-size:12px;font-weight:700;color:var(--muted);max-width:420px;margin-left:auto;margin-right:auto;\">If your files live on a team or shared drive, open <strong>Shared drives</strong> above.</p>"
+            : ""
+          body.innerHTML = nav + '<div class="modalLoading">No folders or files here.' + emptyHint + '<img class="emptyStateImg" src="/images/nothing_here__.png" alt="Nothing here"></div>'
+          renderBrowseBreadcrumb()
+          wireBrowseNav(body)
+          return
+        }
+
+        const folderIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#f59e0b" d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>'
+        const fileIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#64748b" d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg>'
+
+        const rows = items.map(f => {
+          const name = f.name || "(unnamed)"
+          const mime = f.mimeType ? String(f.mimeType) : ""
+          const isFolder = mime === FOLDER_MIME
+          const isSharedRoot = !!f.isSharedDriveRoot
+          const link = f.webViewLink ? String(f.webViewLink) : ""
+          const typeLabel = isFolder ? "Folder" : (mime ? mime.split("/").pop() : "—")
+          const mod = f.modifiedTime ? new Date(f.modifiedTime).toLocaleString() : "—"
+          const size = isFolder ? "—" : formatFileSize(f.size)
+
+          const iconHtml = '<span class="iconCell">' + (isFolder ? folderIcon : fileIcon) + "</span>"
+
+          let innerName
+          if (isFolder) {
+            innerName =
+              '<button type="button" class="folderLink" data-folder-id="' + escapeHtml(f.id) + '" data-folder-name="' + encodeURIComponent(name) + '">' +
+              escapeHtml(name) +
+              "</button>"
+          } else if (link) {
+            innerName = '<a href="' + escapeHtml(link) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(name) + "</a>"
+          } else {
+            innerName = escapeHtml(name)
+          }
+
+          const nameCell = '<div class="browseRowName">' + iconHtml + '<span class="namePart">' + innerName + "</span></div>"
+
+          return "<tr class=\"browseItemRow\" data-item-id=\"" + escapeHtml(String(f.id || "")) + "\" data-item-name=\"" + encodeURIComponent(name) + "\" data-item-email=\"" + encodeURIComponent(browseEmail) + "\" data-item-provider=\"" + encodeURIComponent(browseProvider) + "\" data-shared-root=\"" + (isSharedRoot ? "1" : "0") + "\"><td class=\"fileNameCell\">" + nameCell + "</td><td class=\"fileMime\" title=\"" + escapeHtml(mime || "—") + "\">" + escapeHtml(typeLabel) + "</td><td class=\"fileSize\">" + escapeHtml(size) + "</td><td>" + escapeHtml(mod) + "</td></tr>"
+        }).join("")
+
+        body.innerHTML =
+          nav +
+          '<table class="fileTable"><thead><tr><th>Name</th><th>Type</th><th>Size</th><th>Modified</th></tr></thead><tbody>' +
+          rows +
+          "</tbody></table>"
+
+        renderBrowseBreadcrumb()
+        wireBrowseNav(body)
+
+        body.querySelectorAll(".folderLink").forEach(btn => {
+          btn.addEventListener("click", function () {
+            const fid = btn.getAttribute("data-folder-id")
+            let fname = btn.getAttribute("data-folder-name") || ""
+            try {
+              fname = decodeURIComponent(fname)
+            } catch (e) { }
+            openBrowseFolder(fid, fname)
+          })
+        })
+
+        body.querySelectorAll(".browseItemRow").forEach(row => {
+          row.addEventListener("contextmenu", function (ev) {
+            ev.preventDefault()
+            const fileId = row.getAttribute("data-item-id") || ""
+            const isSharedRoot = row.getAttribute("data-shared-root") === "1"
+            if (!fileId || isSharedRoot) {
+              closeFileContextMenu()
+              return
+            }
+
+            const rawName = row.getAttribute("data-item-name") || ""
+            const rawEmail = row.getAttribute("data-item-email") || ""
+            const rawProvider = row.getAttribute("data-item-provider") || ""
+            let name = "(unnamed)"
+            let email = browseEmail
+            let provider = browseProvider
+            try {
+              name = decodeURIComponent(rawName) || "(unnamed)"
+            } catch (e) { }
+            try {
+              email = decodeURIComponent(rawEmail) || browseEmail
+            } catch (e) { }
+            try {
+              provider = normalizeProvider(decodeURIComponent(rawProvider) || browseProvider)
+            } catch (e) { }
+
+            openFileContextMenu(ev.clientX, ev.clientY, {
+              id: fileId,
+              name,
+              email,
+              provider
+            })
+          })
+        })
+
+      } catch (e) {
+        body.innerHTML = '<div class="modalError">Failed to load folder.</div>'
+      }
+
+    }
+
+    function wireBrowseNav(body) {
+
+      body.querySelectorAll(".browseNavBtn[data-nav]").forEach(btn => {
+        btn.addEventListener("click", function () {
+          const nav = btn.getAttribute("data-nav")
+          if (nav === "my") {
+            goToMyDriveRoot()
+          } else if (nav === "shared") {
+            goToSharedDrivesList()
+          }
+        })
+      })
+
+    }
+
+    document.addEventListener("keydown", function (ev) {
+      if (ev.key === "Escape") {
+        closeBrowseModal()
+        closeFileContextMenu()
+        closeConnectProviderModal()
+        closeMegaLoginModal()
+      }
+    })
+
+    document.getElementById("browseModal").addEventListener("click", function (ev) {
+      if (ev.target === this) {
+        closeBrowseModal()
+      }
+      closeFileContextMenu()
+    })
+    document.addEventListener("click", function (ev) {
+      const menu = document.getElementById("fileContextMenu")
+      if (!menu) return
+      if (menu.style.display !== "none" && !menu.contains(ev.target)) {
+        closeFileContextMenu()
+      }
+    })
+    document.getElementById("fileContextCutBtn").addEventListener("click", cutBrowseItemFromContext)
+    document.getElementById("fileContextCopyBtn").addEventListener("click", copyBrowseItemFromContext)
+    document.getElementById("fileContextPasteBtn").addEventListener("click", pasteBrowseItemFromContext)
+    document.getElementById("fileContextMoveBtn").addEventListener("click", moveBrowseItemFromContext)
+    document.getElementById("fileContextDeleteBtn").addEventListener("click", deleteBrowseItemFromContext)
+
+    async function logoutAccount(email, provider) {
+      if (!email) return
+
+      const res = await fetch("/logout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ email, provider })
+      })
+
+      if (!res.ok) {
+        alert("Unable to logout this account")
+        return
+      }
+
+      loadStorage()
+    }
+
+    function renderGlobalSearchState(html) {
+      const root = document.getElementById("globalSearchResults")
+      if (!root) return
+      root.classList.remove("filled")
+      root.innerHTML = html ? '<div class="searchState">' + html + "</div>" : ""
+    }
+
+    function renderGlobalSearchResults(results) {
+      const root = document.getElementById("globalSearchResults")
+      if (!root) return
+      hideSearchSuggestions()
+      allowSearchSuggestions = false
+
+      if (!Array.isArray(results) || results.length === 0) {
+        root.classList.remove("filled")
+        root.innerHTML = '<div class="searchState">No files or folders matched your search.</div>'
+        return
+      }
+      root.classList.add("filled")
+
+      const rows = results.map(item => {
+        const name = escapeHtml(item.name || "(unnamed)")
+        const provider = providerName(item.accountProvider)
+        const email = escapeHtml(provider + " - " + (item.accountEmail || "Unknown account"))
+        const mime = String(item.mimeType || "")
+        const type = mime === FOLDER_MIME ? "Folder" : (mime ? mime.split("/").pop() : "—")
+        const modified = item.modifiedTime ? new Date(item.modifiedTime).toLocaleString() : "—"
+        const size = mime === FOLDER_MIME ? "—" : formatFileSize(item.size)
+        const link = item.webViewLink ? String(item.webViewLink) : ""
+        const nameCell = link
+          ? '<a class="searchLink" href="' + escapeHtml(link) + '" target="_blank" rel="noopener noreferrer">' + name + "</a>"
+          : name
+
+        return "<tr><td>" + nameCell + "</td><td>" + email + "</td><td>" + escapeHtml(type) + "</td><td>" + escapeHtml(size) + "</td><td>" + escapeHtml(modified) + "</td></tr>"
+      }).join("")
+
+      root.innerHTML =
+        '<table class="searchTable"><thead><tr><th>Name</th><th>Account</th><th>Type</th><th>Size</th><th>Modified</th></tr></thead><tbody>' +
+        rows +
+        "</tbody></table>"
+    }
+
+    function updateSearchClearButton() {
+      const input = document.getElementById("globalSearchInput")
+      const clearBtn = document.getElementById("globalSearchClearBtn")
+      if (!input || !clearBtn) return
+      if (input.value.trim()) {
+        clearBtn.classList.add("show")
+      } else {
+        clearBtn.classList.remove("show")
+      }
+    }
+
+    function hideSearchSuggestions() {
+      const box = document.getElementById("globalSearchSuggest")
+      if (!box) return
+      box.style.display = "none"
+      box.innerHTML = ""
+    }
+
+    function renderSearchSuggestions(items) {
+      const box = document.getElementById("globalSearchSuggest")
+      if (!box) return
+      if (!Array.isArray(items) || items.length === 0) {
+        hideSearchSuggestions()
+        return
+      }
+
+      box.innerHTML = items.map(item => {
+        const name = item && item.name ? String(item.name) : ""
+        const cls = item && item.kind === "history" ? "searchSuggestItem history" : "searchSuggestItem"
+        return '<button type="button" class="' + cls + '" data-suggest="' + encodeURIComponent(name) + '">' + escapeHtml(name) + "</button>"
+      }).join("")
+      box.style.display = "block"
+
+      box.querySelectorAll(".searchSuggestItem").forEach(btn => {
+        btn.addEventListener("click", function () {
+          const input = document.getElementById("globalSearchInput")
+          const raw = btn.getAttribute("data-suggest") || ""
+          if (!input) return
+          let value = ""
+          try {
+            value = decodeURIComponent(raw)
+          } catch (e) {
+            value = raw
+          }
+          input.value = value
+          updateSearchClearButton()
+          hideSearchSuggestions()
+          searchAcrossConnectedDrives()
+        })
+      })
+    }
+
+    async function fetchSearchSuggestions() {
+      const input = document.getElementById("globalSearchInput")
+      if (!input) return
+      if (!allowSearchSuggestions || document.activeElement !== input) {
+        hideSearchSuggestions()
+        return
+      }
+
+      const term = input.value.trim()
+      updateSearchClearButton()
+
+      if (connectedAccountCount === 0) {
+        hideSearchSuggestions()
+        return
+      }
+
+      if (!term) {
+        const history = getSearchHistory().slice(0, 4).map(name => ({ name, kind: "history" }))
+        renderSearchSuggestions(history)
+        return
+      }
+
+      if (term.length < 2) {
+        hideSearchSuggestions()
+        return
+      }
+
+      const reqId = ++searchSuggestRequestId
+
+      try {
+        const res = await fetch("/search?q=" + encodeURIComponent(term))
+        const payload = await res.json()
+        if (reqId !== searchSuggestRequestId) return
+        if (!res.ok) {
+          hideSearchSuggestions()
+          return
+        }
+
+        const history = getSearchHistory().filter(name => name.toLowerCase().includes(term.toLowerCase()))
+        const suggestions = []
+        const seen = new Set()
+        const files = Array.isArray(payload.results) ? payload.results : []
+
+        for (const name of history) {
+          const key = name.toLowerCase()
+          if (seen.has(key)) continue
+          seen.add(key)
+          suggestions.push({ name, kind: "history" })
+          if (suggestions.length >= 8) break
+        }
+
+        for (const item of files) {
+          const name = item && item.name ? String(item.name).trim() : ""
+          if (!name) continue
+          const key = name.toLowerCase()
+          if (seen.has(key)) continue
+          seen.add(key)
+          suggestions.push({ name, kind: "search" })
+          if (suggestions.length >= 8) break
+        }
+
+        renderSearchSuggestions(suggestions)
+      } catch (e) {
+        if (reqId !== searchSuggestRequestId) return
+        hideSearchSuggestions()
+      }
+    }
+
+    function queueSearchSuggestions() {
+      if (searchSuggestTimer) {
+        clearTimeout(searchSuggestTimer)
+      }
+      searchSuggestTimer = setTimeout(fetchSearchSuggestions, 220)
+    }
+
+    async function searchAcrossConnectedDrives() {
+      const input = document.getElementById("globalSearchInput")
+      const btn = document.getElementById("globalSearchBtn")
+      const hint = document.getElementById("globalSearchHint")
+      if (!input || !btn || !hint) return
+
+      const term = input.value.trim()
+      hideSearchSuggestions()
+      allowSearchSuggestions = false
+      searchSuggestRequestId += 1
+      if (searchSuggestTimer) {
+        clearTimeout(searchSuggestTimer)
+        searchSuggestTimer = null
+      }
+      input.blur()
+      updateSearchClearButton()
+
+      if (connectedAccountCount === 0) {
+        renderGlobalSearchState("Connect at least one cloud account before searching.")
+        return
+      }
+
+      if (!term) {
+        renderGlobalSearchState("Enter a file or folder name to start searching.")
+        return
+      }
+      saveSearchHistoryTerm(term)
+
+      btn.disabled = true
+      btn.textContent = "Searching..."
+      const searchRoot = document.getElementById("globalSearchResults")
+      if (searchRoot) {
+        searchRoot.classList.add("filled")
+        searchRoot.innerHTML = renderSearchSkeleton(6)
+      }
+
+      try {
+        const res = await fetch("/search?q=" + encodeURIComponent(term))
+        const payload = await res.json()
+
+        if (!res.ok) {
+          const msg = payload && payload.error ? payload.error : "Search failed"
+          renderGlobalSearchState(escapeHtml(String(msg)))
+          return
+        }
+
+        renderGlobalSearchResults(payload.results || [])
+        hint.textContent = "Showing results for \"" + term + "\" across " + connectedAccountCount + " connected account(s)."
+      } catch (e) {
+        renderGlobalSearchState("Failed to search right now. Please try again.")
+      } finally {
+        btn.disabled = false
+        btn.textContent = "Search"
+      }
+    }
+
+    function formatStorage(bytes) {
+
+      const gb = bytes / (1024 ** 3)
+
+      if (gb >= 1000) {
+        return (gb / 1024).toFixed(2) + " TB"
+      }
+
+      return gb.toFixed(2) + " GB"
+
+    }
+
+    
+
+
+    async function loadStorage() {
+      const accountsEl = document.getElementById("accounts")
+      const cardsEl = document.getElementById("cards")
+      if (accountsEl) {
+        accountsEl.innerHTML = renderSidebarSkeleton(5)
+      }
+      if (cardsEl) {
+        cardsEl.innerHTML = renderCardSkeletons(4)
+      }
+
+      const res = await fetch("/storage")
+      const data = await res.json()
+
+      let sidebarHTML = ""
+      let cardsHTML = ""
+
+
+      const seenAccounts = new Set()
+      const uniqueData = (data || []).filter(acc => {
+        const email = acc?.user?.emailAddress
+        if (!email) return false
+        const key = makeAccountKey(email, acc.provider)
+        if (seenAccounts.has(key)) return false
+        seenAccounts.add(key)
+        return true
+      })
+
+
+      connectedAccountCount = uniqueData.length
+      homeAccounts = uniqueData
+
+      const groupedAccounts = {
+        google: uniqueData.filter(acc => normalizeProvider(acc.provider) === "google"),
+        mega: uniqueData.filter(acc => normalizeProvider(acc.provider) === "mega")
+      }
+
+      function renderSidebarSection(title, items) {
+        if (!items.length) {
+          return
+        }
+        const normalizedTitle = String(title || "").trim().toLowerCase()
+        const iconUrl = normalizedTitle === "mega"
+          ? "https://dl.svgcdn.com/svg/simple-icons/mega.svg"
+          : "https://dl.svgcdn.com/svg/entypo-social/google-drive.svg"
+        const iconAlt = normalizedTitle === "mega" ? "MEGA logo" : "Google Drive logo"
+        const iconHtml = '<span class="accountSectionIcon" aria-hidden="true"><img src="' + iconUrl + '" alt="' + iconAlt + '" loading="lazy" decoding="async"></span>'
+        sidebarHTML += '<div class="accountSectionTitle">' + iconHtml + '<span>' + escapeHtml(title) + "</span></div>"
+        items.forEach(acc => {
+          const email = acc.user?.emailAddress || ""
+          sidebarHTML += `
+<div class="account">
+${escapeHtml(email)}
+</div>
+`
+        })
+      }
+
+      renderSidebarSection("Google Drive", groupedAccounts.google)
+      renderSidebarSection("MEGA", groupedAccounts.mega)
+
+      uniqueData.forEach(acc => {
+
+        const email = acc.user?.emailAddress || ""
+        const displayName = getAccountDisplayName(acc)
+        const provider = providerName(acc.provider)
+
+        const used = acc.storageQuota.usage
+        const limit = acc.storageQuota.limit
+        const driveUsed = acc.storageQuota.usageInDrive
+        const trashUsed = acc.storageQuota.usageInDriveTrash
+
+        const percentRaw = limit > 0 ? (used / limit) * 100 : 0
+        const percent = Math.max(0, Math.min(100, percentRaw)).toFixed(1)
+
+        const usedFormatted = formatStorage(used)
+        const limitFormatted = formatStorage(limit)
+        const driveFormatted = formatStorage(driveUsed)
+        const trashFormatted = formatStorage(trashUsed)
+
+
+
+        const avatar = displayName
+          ? displayName.charAt(0).toUpperCase()
+          : (email ? email.charAt(0).toUpperCase() : "?")
+        const photo = acc.user?.photoLink
+        const safeAvatar = escapeHtml(avatar)
+        const safeAlt = escapeHtml((displayName || email || "User") + " profile photo")
+        const avatarHTML = photo
+          ? `<img src="${escapeHtml(photo)}" alt="${safeAlt}" referrerpolicy="no-referrer" onerror="this.style.display='none'; var fb=this.parentElement && this.parentElement.querySelector('.avatarFallback'); if(fb){fb.style.display='flex';}"><span class="avatarFallback" style="display:none;">${safeAvatar}</span>`
+          : `<span class="avatarFallback">${safeAvatar}</span>`
+
+        cardsHTML += `
+<div class="card">
+
+<div class="cardHeader">
+
+<div class="cardHeaderMain">
+
+<div class="avatar">${avatarHTML}</div>
+
+<div>
+<div class="email">${email}</div>
+<div class="storageText" style="margin:4px 0 0;">${provider}</div>
+</div>
+
+</div>
+
+<button class="logoutBtn" onclick='logoutAccount(${JSON.stringify(email)}, ${JSON.stringify(acc.provider || "google")})' aria-label="Logout ${email}" title="Logout">
+<span class="logoutIcon" aria-hidden="true">logout</span>
+</button>
+
+</div>
+
+<div class="progressBar">
+<div class="progressFill" style="width:${percent}%"></div>
+</div>
+
+<div class="storageText">
+${usedFormatted} / ${limitFormatted} (${percent}% Used)
+</div>
+
+<div class="storageBreakdown">
+
+<div class="row">
+
+
+<span class="storageMetric"><span class="storageMetricIcon">folder</span> ${driveFormatted}</span>
+
+</div>
+
+<div class="row">
+
+
+
+<span class="storageMetric"><span class="storageMetricIcon">delete</span> ${trashFormatted}</span>
+
+</div>
+
+</div>
+
+<button type="button" class="browseBtn" onclick='browseAccount(${JSON.stringify(email)}, ${JSON.stringify(acc.provider || "google")})'>Browse</button>
+
+</div>
+`
+      })
+
+      document.getElementById("accounts").innerHTML = sidebarHTML
+      document.getElementById("cards").innerHTML = cardsHTML
+
+      if (connectedAccountCount === 0) {
+        renderGlobalSearchState(
+          '<div class="searchStateConnect">' +
+          '<div>No connected cloud accounts yet.</div>' +
+          '<img class="searchStateConnectImg" src="/images/dinosaur_waving (1).png" alt="dinosaur waving">' +
+          '<p class="searchStateConnectText">hi, please connect</p>' +
+          "</div>"
+        )
+      } else {
+        renderGlobalSearchState("")
+      }
+
+
+      try {
+        setGreetingFromSavedName()
+      } catch (e) { }
+
+    }
+
+    initFirstVisitNamePrompt()
+    loadStorage()
+
+    document.getElementById("globalSearchBtn").addEventListener("click", searchAcrossConnectedDrives)
+    document.getElementById("globalSearchInput").addEventListener("keydown", function (ev) {
+      if (ev.key === "Enter") {
+        ev.preventDefault()
+        searchAcrossConnectedDrives()
+      }
+    })
+    document.getElementById("globalSearchInput").addEventListener("input", function () {
+      allowSearchSuggestions = true
+      queueSearchSuggestions()
+    })
+    document.getElementById("globalSearchInput").addEventListener("focus", function () {
+      allowSearchSuggestions = true
+      queueSearchSuggestions()
+    })
+    document.getElementById("globalSearchClearBtn").addEventListener("click", function () {
+      const input = document.getElementById("globalSearchInput")
+      const hint = document.getElementById("globalSearchHint")
+      if (!input || !hint) return
+      input.value = ""
+      hideSearchSuggestions()
+      allowSearchSuggestions = false
+      updateSearchClearButton()
+      renderGlobalSearchState("")
+      hint.textContent = "Type a file or folder name to search across every connected account."
+      input.focus()
+    })
+    document.getElementById("globalSearchResults").addEventListener("click", function () {
+      hideSearchSuggestions()
+      allowSearchSuggestions = false
+    })
+    document.addEventListener("click", function (ev) {
+      const wrap = document.querySelector(".homeSearch")
+      if (!wrap) return
+      if (!wrap.contains(ev.target)) {
+        hideSearchSuggestions()
+      }
+    })
+    window.addEventListener("dragenter", function (ev) {
+      if (!hasDraggedFiles(ev)) return
+      ev.preventDefault()
+      homeDragDepth += 1
+      setHomeDropOverlay(true)
+    })
+    window.addEventListener("dragover", function (ev) {
+      if (!hasDraggedFiles(ev)) return
+      ev.preventDefault()
+      if (ev.dataTransfer) {
+        ev.dataTransfer.dropEffect = "copy"
+      }
+      setHomeDropOverlay(true)
+    })
+    window.addEventListener("dragleave", function (ev) {
+      if (!hasDraggedFiles(ev)) return
+      ev.preventDefault()
+
+      homeDragDepth = Math.max(0, homeDragDepth - 1)
+      if (homeDragDepth === 0) {
+        setHomeDropOverlay(false)
+      }
+    })
+    window.addEventListener("drop", function (ev) {
+      if (!hasDraggedFiles(ev)) return
+      ev.preventDefault()
+      homeDragDepth = 0
+      setHomeDropOverlay(false)
+      openHomeUploadChoiceModal(ev.dataTransfer ? ev.dataTransfer.files : [])
+    })
+    document.getElementById("homeUploadChoiceCloseBtn").addEventListener("click", closeHomeUploadChoiceModal)
+    document.getElementById("homeUploadSelectBtn").addEventListener("click", handleHomeUploadSelectClick)
+    document.getElementById("homeUploadAutoBtn").addEventListener("click", handleHomeUploadAutoClick)
+    document.getElementById("homeUploadChoiceModal").addEventListener("click", function (ev) {
+      if (ev.target === this) {
+        closeHomeUploadChoiceModal()
+      }
+    })
+    document.getElementById("connectProviderCloseBtn").addEventListener("click", closeConnectProviderModal)
+    document.getElementById("connectProviderModal").addEventListener("click", function (ev) {
+      if (ev.target === this) {
+        closeConnectProviderModal()
+      }
+    })
+    document.getElementById("connectGoogleBtn").addEventListener("click", function () {
+      connectProvider("google")
+    })
+    document.getElementById("connectMegaBtn").addEventListener("click", function () {
+      connectProvider("mega")
+    })
+    document.getElementById("megaLoginCloseBtn").addEventListener("click", closeMegaLoginModal)
+    document.getElementById("megaLoginModal").addEventListener("click", function (ev) {
+      if (ev.target === this) {
+        closeMegaLoginModal()
+      }
+    })
+    document.getElementById("megaLoginForm").addEventListener("submit", submitMegaLoginForm)
+    document.getElementById("megaTokenSubmitBtn").addEventListener("click", connectMegaWithSavedToken)
+    document.getElementById("namePromptForm").addEventListener("submit", submitNamePrompt)
+    document.getElementById("themeSwitchBtn").addEventListener("click", function () {
+      const next = document.body.classList.contains("darkMode") ? "light" : "dark"
+      localStorage.setItem(THEME_STORAGE_KEY, next)
+      applyTheme(next)
+    })
+    const savedTheme = localStorage.getItem(THEME_STORAGE_KEY)
+    applyTheme(savedTheme === "dark" ? "dark" : "light")
+    updateSearchClearButton()
+  </script>
+
+</body>
+
+</html>
