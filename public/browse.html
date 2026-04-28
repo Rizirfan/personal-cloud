@@ -24,6 +24,8 @@ body.darkMode{
   --border:#3a4c68;
 }
 
+
+
 *{ box-sizing:border-box; }
 
 html,
@@ -152,12 +154,13 @@ button{
 }
 
 .backBtn{
-  border:2px solid rgba(17,17,17,0.3);
-  background:var(--card);
+  border:2px dashed rgba(17, 17, 17, 0.726);
+  background:rgba(255,255,255,0.55);
   color:var(--text);
   border-radius:9999px;
-  min-height:44px;
-  padding:0 16px;
+  min-height:36px;
+  min-width:84px;
+  padding:7px 14px;
   font-weight:900;
   font-size:12px;
   cursor:pointer;
@@ -169,12 +172,14 @@ button{
 }
 
 body.darkMode .backBtn{
-  border-color:#4a5f84;
-  background:var(--card);
+  border-color:rgba(203,213,225,0.35);
+  background:rgba(16,25,43,0.72);
+  color:var(--text);
 }
 
 .backBtn:hover{
-  border-style:dashed;
+  
+  background:rgba(17, 17, 17, 0.06);
 }
 
 .backBtn:active{
@@ -472,7 +477,7 @@ body.darkMode .browseSearchClearBtn{
 }
 
 body.darkMode .browseSearchLeadIcon{
-  color:#9fb2d3;
+  color:#e2e8f0;
 }
 
 body.darkMode .browseSearchInput::placeholder{
@@ -678,6 +683,7 @@ body.darkMode .fileTable tr:hover td{
   border-collapse:collapse;
   table-layout:fixed;
 }
+ 
 
 .skeletonTable th,
 .skeletonTable td{
@@ -1396,6 +1402,8 @@ function renderBrowseRows(items){
     const isFolder = mime === FOLDER_MIME
     const isSharedRoot = !!f.isSharedDriveRoot
     const link = f.webViewLink ? String(f.webViewLink) : ""
+    const fileId = String(f.id || "")
+    const openUrl = link || (fileId ? ("/open-file?email=" + encodeURIComponent(browseEmail) + "&provider=" + encodeURIComponent(browseProvider) + "&fileId=" + encodeURIComponent(fileId)) : "")
     const typeLabel = isFolder ? "Folder" : (mime ? mime.split("/").pop() : "—")
     const mod = f.modifiedTime ? new Date(f.modifiedTime).toLocaleString() : "—"
     const size = isFolder ? "—" : formatFileSize(f.size)
@@ -1403,8 +1411,8 @@ function renderBrowseRows(items){
     let innerName
     if(isFolder && !browseSearchMode){
       innerName = '<button type="button" class="folderLink" data-folder-id="' + escapeHtml(f.id) + '" data-folder-name="' + encodeURIComponent(name) + '">' + escapeHtml(name) + "</button>"
-    }else if(link){
-      innerName = '<a href="' + escapeHtml(link) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(name) + "</a>"
+    }else if(openUrl){
+      innerName = '<a href="' + escapeHtml(openUrl) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(name) + "</a>"
     }else{
       innerName = escapeHtml(name)
     }
@@ -1559,6 +1567,8 @@ async function loadBrowseFolder(){
       const isFolder = mime === FOLDER_MIME
       const isSharedRoot = !!f.isSharedDriveRoot
       const link = f.webViewLink ? String(f.webViewLink) : ""
+      const fileId = String(f.id || "")
+      const openUrl = link || (fileId ? ("/open-file?email=" + encodeURIComponent(browseEmail) + "&provider=" + encodeURIComponent(browseProvider) + "&fileId=" + encodeURIComponent(fileId)) : "")
       const typeLabel = isFolder ? "Folder" : (mime ? mime.split("/").pop() : "—")
       const mod = f.modifiedTime ? new Date(f.modifiedTime).toLocaleString() : "—"
       const size = isFolder ? "—" : formatFileSize(f.size)
@@ -1566,8 +1576,8 @@ async function loadBrowseFolder(){
       let innerName
       if(isFolder){
         innerName = '<button type="button" class="folderLink" data-folder-id="' + escapeHtml(f.id) + '" data-folder-name="' + encodeURIComponent(name) + '">' + escapeHtml(name) + "</button>"
-      }else if(link){
-        innerName = '<a href="' + escapeHtml(link) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(name) + "</a>"
+      }else if(openUrl){
+        innerName = '<a href="' + escapeHtml(openUrl) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(name) + "</a>"
       }else{
         innerName = escapeHtml(name)
       }

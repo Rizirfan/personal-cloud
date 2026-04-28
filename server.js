@@ -562,6 +562,53 @@ app.get("/files", async (req, res) => {
   }
 })
 
+app.get("/open-file", async (req, res) => {
+  try {
+    const email = getQueryTrimmed(req, "email")
+    const provider = getQueryTrimmed(req, "provider")
+    const fileId = getQueryTrimmed(req, "fileId")
+
+    if (!email || !fileId) {
+      return res.status(400).json({ error: "Query parameters email and fileId are required" })
+    }
+
+    const account = getAccountByEmail(email, provider)
+    if (!account) {
+      return res.status(404).json({ error: "Account not found" })
+    }
+
+    if (account.provider === "mega") {
+      const storage = account.storage || (await getMegaStorage())
+      await storage.reload(true)
+      const node = getMegaNodeById(storage, fileId)
+      if (!node) {
+        return res.status(404).json({ error: "File not found" })
+      }
+      if (node.directory) {
+        return res.status(400).json({ error: "Cannot open a folder link from this endpoint" })
+      }
+
+      const megaUrl = await node.link(false)
+      return res.redirect(megaUrl)
+    }
+
+    const response = await axios.get(`${DRIVE_FILES_URL}/${encodeURIComponent(fileId)}`, {
+      headers: authHeaders(account.token),
+      params: {
+        fields: "id, webViewLink, webContentLink, mimeType",
+        supportsAllDrives: true
+      }
+    })
+    const openUrl = response.data?.webViewLink || response.data?.webContentLink
+    if (!openUrl) {
+      return res.status(404).json({ error: "No open link available for this file" })
+    }
+    return res.redirect(openUrl)
+  } catch (err) {
+    sendErrorJson(res, err, "Error opening file")
+  }
+})
+
 app.get("/search", async (req, res) => {
   try {
     const query = getQueryTrimmed(req, "q")
