@@ -308,6 +308,11 @@
       color: var(--text);
     }
 
+    body.darkMode .searchTable tr:hover td {
+      background: rgba(24, 36, 60, 0.72);
+
+    }
+
     body.darkMode .searchLink {
       color: #8cbcff;
     }
@@ -932,6 +937,20 @@
       border-bottom: none;
     }
 
+    .searchTable tr:hover td {
+      background: rgba(17, 17, 17, 0.03);
+    }
+
+    .searchResultRow {
+      cursor: pointer;
+    }
+
+    .searchResultRow a,
+    .searchResultRow button {
+      cursor: pointer;
+    }
+    
+
     .totalStorageCard {
       background: var(--card);
       border: 3px dashed var(--border);
@@ -1091,6 +1110,7 @@
       text-overflow: ellipsis;
     }
 
+
     .searchAccountEmail {
       display: block;
       font-size: 13px;
@@ -1104,6 +1124,7 @@
     .searchSizeCell {
       white-space: nowrap;
     }
+
 
     .searchTypeCell {
       overflow: hidden;
@@ -1999,6 +2020,131 @@
       color: var(--muted);
     }
 
+    .uploadStatusCard {
+      position: fixed;
+      right: 16px;
+      bottom: 16px;
+      width: min(360px, calc(100vw - 24px));
+      background: var(--card);
+      border: 2px solid var(--border);
+      border-radius: 14px;
+      padding: 12px;
+      z-index: 1400;
+      box-shadow: 0 10px 24px rgba(17, 17, 17, 0.16);
+      display: none;
+    }
+
+    .uploadStatusCard.show {
+      display: block;
+    }
+
+    .uploadStatusHead {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .uploadStatusTitle {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 900;
+      font-family: var(--font-display);
+    }
+
+    .uploadStatusClose {
+      border: 1px solid rgba(17, 17, 17, 0.25);
+      background: transparent;
+      color: var(--muted);
+      border-radius: 9999px;
+      width: 24px;
+      height: 24px;
+      cursor: pointer;
+      line-height: 1;
+      font-size: 14px;
+      font-weight: 900;
+    }
+
+    .uploadStatusLine {
+      margin: 4px 0;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .uploadStatusMeta {
+      color: var(--muted);
+      font-weight: 800;
+    }
+
+    .uploadStatusBar {
+      margin-top: 8px;
+      height: 8px;
+      border: 1px solid var(--border);
+      border-radius: 9999px;
+      overflow: hidden;
+      background: rgba(17, 17, 17, 0.06);
+    }
+
+    .uploadStatusBarFill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #22c55e 0%, #16a34a 100%);
+      transition: width 0.2s ease;
+    }
+
+    .uploadCancelModalCard {
+      width: min(340px, calc(100vw - 24px));
+      border: 2px solid var(--border);
+      border-radius: 14px;
+      background: var(--card);
+      box-shadow: 0 14px 34px rgba(17, 17, 17, 0.2);
+      padding: 14px;
+    }
+
+    .uploadCancelModalTitle {
+      margin: 0 0 6px;
+      font-size: 14px;
+      font-weight: 900;
+      font-family: var(--font-display);
+      color: var(--text);
+    }
+
+    .uploadCancelModalText {
+      margin: 0;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--muted);
+    }
+
+    .uploadCancelModalActions {
+      margin-top: 12px;
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .uploadCancelBtn {
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--text);
+      border-radius: 9999px;
+      padding: 7px 12px;
+      font-size: 12px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .uploadCancelBtn.primary {
+      border-color: #dc2626;
+      background: #dc2626;
+      color: #fff;
+    }
+
     .connectModal {
       width: 460px;
       max-width: calc(100vw - 32px);
@@ -2394,6 +2540,29 @@
   </div>
   <div id="homeDropOverlay" class="homeDropOverlay" aria-hidden="true">
     <div class="homeDropOverlayText">Drop here to upload</div>
+  </div>
+  <div id="uploadStatusCard" class="uploadStatusCard" aria-live="polite">
+    <div class="uploadStatusHead">
+      <h3 class="uploadStatusTitle" id="uploadStatusTitle">Uploading files</h3>
+      <button type="button" class="uploadStatusClose" id="uploadStatusCloseBtn" aria-label="Close upload status">×</button>
+    </div>
+    <p class="uploadStatusLine uploadStatusMeta" id="uploadStatusAccount">Account: —</p>
+    <p class="uploadStatusLine" id="uploadStatusFile">File: —</p>
+    <p class="uploadStatusLine uploadStatusMeta" id="uploadStatusProgress">0/0 files</p>
+    <p class="uploadStatusLine uploadStatusMeta" id="uploadStatusStats">0% • 0 B / 0 B • 0 B/s • ETA —</p>
+    <div class="uploadStatusBar">
+      <div class="uploadStatusBarFill" id="uploadStatusBarFill"></div>
+    </div>
+  </div>
+  <div class="modalOverlay" id="uploadCancelConfirmModal" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="uploadCancelModalCard">
+      <p class="uploadCancelModalTitle">Cancel upload?</p>
+      <p class="uploadCancelModalText">Your current upload will stop. You can start it again later.</p>
+      <div class="uploadCancelModalActions">
+        <button type="button" class="uploadCancelBtn" id="uploadCancelBackBtn">Back</button>
+        <button type="button" class="uploadCancelBtn primary" id="uploadCancelConfirmBtn">Cancel Upload</button>
+      </div>
+    </div>
   </div>
   <div class="modalOverlay" id="homeUploadChoiceModal" role="dialog" aria-modal="true"
     aria-labelledby="homeUploadChoiceTitle" aria-hidden="true">
@@ -2908,6 +3077,9 @@
     let homeDropFiles = []
     let homeDragDepth = 0
     let homeUploadInProgress = false
+    let homeUploadCancelRequested = false
+    let homeActiveUploadXhr = null
+    let homeActivePollTimer = null
 
     let browseEmail = ""
     let browseProvider = "google"
@@ -3245,6 +3417,95 @@
       homeUploadInProgress = false
     }
 
+    function setUploadStatusCardVisible(show) {
+      const card = document.getElementById("uploadStatusCard")
+      if (!card) return
+      card.classList.toggle("show", !!show)
+    }
+
+    function updateUploadStatusCard(details) {
+      const titleEl = document.getElementById("uploadStatusTitle")
+      const accountEl = document.getElementById("uploadStatusAccount")
+      const fileEl = document.getElementById("uploadStatusFile")
+      const progressEl = document.getElementById("uploadStatusProgress")
+      const statsEl = document.getElementById("uploadStatusStats")
+      const barEl = document.getElementById("uploadStatusBarFill")
+      if (!titleEl || !accountEl || !fileEl || !progressEl || !statsEl || !barEl) return
+
+      const total = Math.max(0, Number(details.total) || 0)
+      const index = Math.max(0, Number(details.index) || 0)
+      const ratio = Number.isFinite(details.percent)
+        ? Math.max(0, Math.min(100, Number(details.percent)))
+        : (total > 0 ? Math.max(0, Math.min(100, (index / total) * 100)) : 0)
+
+      titleEl.textContent = details.title || "Uploading files"
+      accountEl.textContent = "Account: " + (details.account || "—")
+      fileEl.textContent = "File: " + (details.file || "—")
+      progressEl.textContent = String(index) + "/" + String(total) + " files"
+      statsEl.textContent = details.stats || "0% • 0 B / 0 B • 0 B/s • ETA —"
+      barEl.style.width = ratio.toFixed(1) + "%"
+    }
+
+    function formatRate(bytesPerSec) {
+      const n = Number(bytesPerSec)
+      if (!Number.isFinite(n) || n <= 0) return "0 B/s"
+      return formatFileSize(n) + "/s"
+    }
+
+    function formatDuration(totalSeconds) {
+      const s = Math.max(0, Math.floor(Number(totalSeconds) || 0))
+      const mm = Math.floor(s / 60)
+      const ss = s % 60
+      if (mm > 0) return String(mm) + "m " + String(ss).padStart(2, "0") + "s"
+      return String(ss) + "s"
+    }
+
+    function makeUploadId() {
+      return "up_" + Date.now() + "_" + Math.random().toString(36).slice(2, 10)
+    }
+
+    function uploadFileWithProgress(form, onProgress, uploadId, fileSize, meta) {
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+        homeActiveUploadXhr = xhr
+        const STREAM_THRESHOLD = 50 * 1024 * 1024
+        const isLarge = Number(fileSize || 0) > STREAM_THRESHOLD
+        const url = isLarge ? "/upload-item-stream" : "/upload-item"
+        xhr.open("POST", url, true)
+        if (isLarge) {
+          xhr.setRequestHeader("x-file-size", String(Number(fileSize || 0)))
+          if (meta && meta.email) xhr.setRequestHeader("x-upload-email", String(meta.email))
+          if (meta && meta.provider) xhr.setRequestHeader("x-upload-provider", String(meta.provider))
+          if (meta && meta.parentId) xhr.setRequestHeader("x-upload-parent-id", String(meta.parentId))
+          if (uploadId) xhr.setRequestHeader("x-upload-id", String(uploadId))
+        }
+        xhr.upload.onprogress = function (ev) {
+          if (!ev || !ev.lengthComputable) return
+          onProgress(ev.loaded, ev.total)
+        }
+        xhr.onload = function () {
+          if (homeActiveUploadXhr === xhr) homeActiveUploadXhr = null
+          const raw = xhr.responseText || ""
+          let payload = {}
+          try { payload = raw ? JSON.parse(raw) : {} } catch (e) {}
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve(payload)
+          } else {
+            reject(new Error(payload && payload.error ? payload.error : "Upload failed"))
+          }
+        }
+        xhr.onerror = function () {
+          if (homeActiveUploadXhr === xhr) homeActiveUploadXhr = null
+          reject(new Error("Upload failed. Please try again."))
+        }
+        xhr.onabort = function () {
+          if (homeActiveUploadXhr === xhr) homeActiveUploadXhr = null
+          reject(new Error("Upload cancelled by user."))
+        }
+        xhr.send(form)
+      })
+    }
+
     async function uploadDroppedFilesToAccount(accountKey) {
       const status = document.getElementById("homeUploadChoiceStatus")
       if (homeUploadInProgress) return
@@ -3261,37 +3522,182 @@
       }
 
       homeUploadInProgress = true
+      homeUploadCancelRequested = false
+      const totalBytes = homeDropFiles.reduce((sum, f) => sum + (Number(f && f.size) || 0), 0)
+      let uploadedCompletedBytes = 0
+      let lastSampleBytes = 0
+      let lastSampleTime = Date.now()
+      let smoothedSpeed = 0
+
+      setUploadStatusCardVisible(true)
+      updateUploadStatusCard({
+        title: "Uploading files",
+        account: providerName(provider) + " - " + email,
+        file: "Preparing...",
+        index: 0,
+        total: homeDropFiles.length,
+        percent: 0,
+        stats: "0% • 0 B / " + formatFileSize(totalBytes) + " • 0 B/s • ETA —"
+      })
       if (status) {
         status.textContent = "Uploading " + homeDropFiles.length + " file(s) to " + providerName(provider) + " - " + email + "..."
       }
 
       try {
-        for (const file of homeDropFiles) {
+        for (let i = 0; i < homeDropFiles.length; i++) {
+          if (homeUploadCancelRequested) {
+            throw new Error("Upload cancelled by user.")
+          }
+          const file = homeDropFiles[i]
+          lastSampleBytes = uploadedCompletedBytes
+          lastSampleTime = Date.now()
+          smoothedSpeed = 0
+          updateUploadStatusCard({
+            title: "Uploading files",
+            account: providerName(provider) + " - " + email,
+            file: file && file.name ? file.name : "Unnamed file",
+            index: i + 1,
+            total: homeDropFiles.length,
+            percent: totalBytes > 0 ? (uploadedCompletedBytes / totalBytes) * 100 : 0,
+            stats: (totalBytes > 0 ? Math.round((uploadedCompletedBytes / totalBytes) * 100) : 0) + "% • " + formatFileSize(uploadedCompletedBytes) + " / " + formatFileSize(totalBytes) + " • " + formatRate(smoothedSpeed) + " • ETA —"
+          })
           const form = new FormData()
           form.append("email", email)
           form.append("provider", provider)
           form.append("parentId", "root")
           form.append("file", file, file.name)
+          const fileSize = Number(file && file.size) || 0
+          const uploadId = makeUploadId()
+          form.append("uploadId", uploadId)
+          const isMegaProvider = normalizeProvider(provider) === "mega"
+          let megaPhaseActive = true
+          let hasServerSample = false
+          let currentFileClientLoaded = 0
+          let lastServerRatio = 0
+          let pollTimer = null
+          pollTimer = window.setInterval(async () => {
+            if (!megaPhaseActive) return
+            try {
+              const pRes = await fetch("/upload-progress?uploadId=" + encodeURIComponent(uploadId))
+              const pData = await pRes.json()
+              if (!pRes.ok || !pData || pData.status === "unknown") return
+              hasServerSample = true
+              const bytesUploaded = Number(pData.bytesUploaded || 0)
+              const bytesTotal = Number(pData.bytesTotal || fileSize || 0)
+              const isMegaPhase = pData.phase === "mega"
+              const rawRatio = bytesTotal > 0 ? (bytesUploaded / bytesTotal) : 0
+              const clampedRatio = Math.max(0, Math.min(1, rawRatio))
+              lastServerRatio = Math.max(lastServerRatio, clampedRatio)
+              const safePhaseLoaded = Math.max(0, Math.min(fileSize, lastServerRatio * fileSize))
+              const overallLoaded = uploadedCompletedBytes + safePhaseLoaded
+              const percent = totalBytes > 0 ? (overallLoaded / totalBytes) * 100 : 0
+              const serverRate = Number(pData.avgBps || 0)
+              smoothedSpeed = serverRate > 0 ? serverRate : smoothedSpeed
+              lastSampleBytes = overallLoaded
+              lastSampleTime = Date.now()
+              const remaining = Math.max(0, totalBytes - overallLoaded)
+              const etaSec = smoothedSpeed > 0 ? Math.ceil(remaining / smoothedSpeed) : 0
 
-          const res = await fetch("/upload-item", {
-            method: "POST",
-            body: form
-          })
-          const payload = await res.json()
-          if (!res.ok) {
-            const msg = payload && payload.error ? payload.error : "Upload failed"
-            throw new Error(msg)
+              updateUploadStatusCard({
+                title: isMegaProvider ? "Uploading to MEGA" : (isMegaPhase ? "Uploading to provider" : "Uploading files"),
+                account: providerName(provider) + " - " + email,
+                file: file && file.name ? file.name : "Unnamed file",
+                index: i + 1,
+                total: homeDropFiles.length,
+                percent,
+                stats: Math.round(percent) + "% • " + formatFileSize(overallLoaded) + " / " + formatFileSize(totalBytes) + " • " + formatRate(smoothedSpeed) + " • ETA " + (smoothedSpeed > 0 ? formatDuration(etaSec) : "—")
+              })
+            } catch (e) {}
+          }, 300)
+          homeActivePollTimer = pollTimer
+
+          await uploadFileWithProgress(form, function (loaded) {
+            currentFileClientLoaded = Math.min(fileSize, Math.max(0, Number(loaded) || 0))
+            if (hasServerSample) {
+              return
+            }
+            const now = Date.now()
+            const overallLoaded = uploadedCompletedBytes + currentFileClientLoaded
+            const dt = Math.max(0.001, (now - lastSampleTime) / 1000)
+            const dBytes = Math.max(0, overallLoaded - lastSampleBytes)
+            if (dt >= 0.2 && dBytes > 0) {
+              const instant = dBytes / dt
+              smoothedSpeed = smoothedSpeed > 0 ? (smoothedSpeed * 0.75 + instant * 0.25) : instant
+              lastSampleBytes = overallLoaded
+              lastSampleTime = now
+            }
+
+            const percent = totalBytes > 0 ? (overallLoaded / totalBytes) * 100 : 0
+            const remaining = Math.max(0, totalBytes - overallLoaded)
+            const etaSec = smoothedSpeed > 0 ? Math.ceil(remaining / smoothedSpeed) : 0
+
+            updateUploadStatusCard({
+              title: isMegaProvider ? "Uploading to MEGA" : "Uploading files",
+              account: providerName(provider) + " - " + email,
+              file: file && file.name ? file.name : "Unnamed file",
+              index: i + 1,
+              total: homeDropFiles.length,
+              percent,
+              stats: Math.round(percent) + "% • " + formatFileSize(overallLoaded) + " / " + formatFileSize(totalBytes) + " • " + formatRate(smoothedSpeed) + " • ETA " + (smoothedSpeed > 0 ? formatDuration(etaSec) : "—")
+            })
+          }, uploadId, fileSize, { email, provider, parentId: "root" })
+          megaPhaseActive = false
+          if (pollTimer) {
+            clearInterval(pollTimer)
+            pollTimer = null
           }
+          homeActivePollTimer = null
+          uploadedCompletedBytes += fileSize
         }
 
         if (status) status.textContent = "Upload complete."
+        updateUploadStatusCard({
+          title: "Upload complete",
+          account: providerName(provider) + " - " + email,
+          file: "All files uploaded successfully",
+          index: homeDropFiles.length,
+          total: homeDropFiles.length,
+          percent: 100,
+          stats: "100% • " + formatFileSize(totalBytes) + " / " + formatFileSize(totalBytes) + " • Done"
+        })
         await loadStorage()
         window.setTimeout(closeHomeUploadChoiceModal, 450)
+        window.setTimeout(() => setUploadStatusCardVisible(false), 2000)
       } catch (err) {
+        const isCancelled = homeUploadCancelRequested || (err && String(err.message || "").toLowerCase().includes("cancel"))
         if (status) {
-          status.textContent = err && err.message ? err.message : "Upload failed. Please try again."
+          status.textContent = isCancelled ? "Upload cancelled." : (err && err.message ? err.message : "Upload failed. Please try again.")
+        }
+        updateUploadStatusCard({
+          title: isCancelled ? "Upload cancelled" : "Upload failed",
+          account: providerName(provider) + " - " + email,
+          file: isCancelled ? "Upload cancelled by user." : (err && err.message ? err.message : "Upload failed. Please try again."),
+          index: 0,
+          total: homeDropFiles.length
+        })
+        if (isCancelled) {
+          setUploadStatusCardVisible(false)
         }
         homeUploadInProgress = false
+      } finally {
+        if (homeActivePollTimer) {
+          clearInterval(homeActivePollTimer)
+          homeActivePollTimer = null
+        }
+        homeActiveUploadXhr = null
+        homeUploadInProgress = false
+      }
+    }
+
+    function setUploadCancelConfirmVisible(show) {
+      const modal = document.getElementById("uploadCancelConfirmModal")
+      if (!modal) return
+      if (show) {
+        modal.classList.add("open")
+        modal.setAttribute("aria-hidden", "false")
+      } else {
+        modal.classList.remove("open")
+        modal.setAttribute("aria-hidden", "true")
       }
     }
 
@@ -3693,9 +4099,11 @@
         const fileId = item && item.id ? String(item.id) : ""
         const accountEmail = item && item.accountEmail ? String(item.accountEmail) : ""
         const accountProvider = item && item.accountProvider ? String(item.accountProvider) : "google"
-        const openUrl = link || (fileId && accountEmail
-          ? ("/open-file?email=" + encodeURIComponent(accountEmail) + "&provider=" + encodeURIComponent(accountProvider) + "&fileId=" + encodeURIComponent(fileId))
-          : "")
+        const openUrl = isFolder
+          ? ("/browse.html?email=" + encodeURIComponent(accountEmail) + "&provider=" + encodeURIComponent(accountProvider) + "&folderId=" + encodeURIComponent(fileId) + "&folderName=" + encodeURIComponent(item.name || "(folder)"))
+          : (link || (fileId && accountEmail
+            ? ("/open-file?email=" + encodeURIComponent(accountEmail) + "&provider=" + encodeURIComponent(accountProvider) + "&fileId=" + encodeURIComponent(fileId))
+            : ""))
         const nameText = openUrl
           ? '<a class="searchLink searchNameText" href="' + escapeHtml(openUrl) + '" target="_blank" rel="noopener noreferrer">' + name + "</a>"
           : '<span class="searchNameText">' + name + "</span>"
@@ -3720,7 +4128,7 @@
           ' data-open-url="' + escapeHtml(openUrl) + '"' +
           '>more_vert</button>'
 
-        return "<tr><td class=\"searchNameCell\">" + nameCell + "</td><td>" + accountCell + "</td><td class=\"searchSizeCell\">" + escapeHtml(size) + "</td><td class=\"searchDateCell\">" + escapeHtml(modified) + "</td><td class=\"searchActionsCell\">" + actionBtn + "</td></tr>"
+        return "<tr class=\"searchResultRow\" data-open-url=\"" + escapeHtml(openUrl) + "\"><td class=\"searchNameCell\">" + nameCell + "</td><td>" + accountCell + "</td><td class=\"searchSizeCell\">" + escapeHtml(size) + "</td><td class=\"searchDateCell\">" + escapeHtml(modified) + "</td><td class=\"searchActionsCell\">" + actionBtn + "</td></tr>"
       }).join("")
 
       root.innerHTML =
@@ -3733,6 +4141,15 @@
           ev.preventDefault()
           ev.stopPropagation()
           openSearchActionMenu(btn)
+        })
+      })
+
+      root.querySelectorAll(".searchResultRow").forEach(row => {
+        row.addEventListener("click", function (ev) {
+          if (ev.target.closest("a, button")) return
+          const openUrl = row.getAttribute("data-open-url") || ""
+          if (!openUrl) return
+          window.open(openUrl, "_blank", "noopener,noreferrer")
         })
       })
     }
@@ -4217,6 +4634,30 @@ ${usedFormatted} / ${limitFormatted} (${percent}% Used)
     })
 
     document.getElementById("homeUploadChoiceCloseBtn").addEventListener("click", closeHomeUploadChoiceModal)
+    document.getElementById("uploadStatusCloseBtn").addEventListener("click", function () {
+      if (!homeUploadInProgress) {
+        setUploadStatusCardVisible(false)
+        return
+      }
+      setUploadCancelConfirmVisible(true)
+    })
+    document.getElementById("uploadCancelBackBtn").addEventListener("click", function () {
+      setUploadCancelConfirmVisible(false)
+    })
+    document.getElementById("uploadCancelConfirmBtn").addEventListener("click", function () {
+      homeUploadCancelRequested = true
+      if (homeActivePollTimer) {
+        clearInterval(homeActivePollTimer)
+        homeActivePollTimer = null
+      }
+      if (homeActiveUploadXhr) {
+        homeActiveUploadXhr.abort()
+      }
+      setUploadCancelConfirmVisible(false)
+    })
+    document.getElementById("uploadCancelConfirmModal").addEventListener("click", function (ev) {
+      if (ev.target === this) setUploadCancelConfirmVisible(false)
+    })
     document.getElementById("homeUploadSelectBtn").addEventListener("click", handleHomeUploadSelectClick)
     document.getElementById("homeUploadAutoBtn").addEventListener("click", handleHomeUploadAutoClick)
     document.getElementById("homeUploadChoiceModal").addEventListener("click", function (ev) {

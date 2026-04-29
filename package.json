@@ -21,6 +21,7 @@
   "homepage": "https://github.com/tejasmmali/Multi-Drive#readme",
   "dependencies": {
     "axios": "^1.14.0",
+    "busboy": "^1.6.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.1",
     "express": "^5.2.1",

@@ -3,6 +3,7 @@ const axios = require("axios")
 const cors = require("cors")
 const path = require("path")
 const multer = require("multer")
+const busboy = require("busboy")
 const mega = require("megajs")
 require("dotenv").config()
 
@@ -15,6 +16,14 @@ const upload = multer({
 app.use(cors())
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
+
+app.use((req, res, next) => {
+  if (req.path === "/upload-item-stream" || req.path === "/upload-item") {
+    req.setTimeout(2 * 60 * 60 * 1000)
+    res.setTimeout(2 * 60 * 60 * 1000)
+  }
+  next()
+})
 app.use(express.static(path.join(__dirname, "public")))
 app.use("/images", express.static(path.join(__dirname, "images")))
 
@@ -33,8 +42,44 @@ const DRIVE_UPLOAD_URL = "https://www.googleapis.com/upload/drive/v3/files"
 const FOLDER_MIME = "application/vnd.google-apps.folder"
 const DRIVE_FILES_FIELDS = "nextPageToken, files(id, name, mimeType, size, modifiedTime, webViewLink, iconLink, thumbnailLink, parents, driveId)"
 
+
 let accounts = []
 let megaStorage = null
+const uploadProgress = new Map()
+
+function setUploadProgress(id, patch) {
+  if (!id) return
+  const now = Date.now()
+  const prev = uploadProgress.get(id) || {}
+  const next = {
+    ...prev,
+    ...patch,
+    updatedAt: now
+  }
+
+  if (!next.startedAt) { 
+    next.startedAt = now
+  }
+
+  const uploaded = Number(next.bytesUploaded || 0)
+  const total = Number(next.bytesTotal || 0)
+  const elapsedSec = Math.max(0.001, (now - Number(next.startedAt || now)) / 1000)
+  const avgBps = uploaded > 0 ? (uploaded / elapsedSec) : 0
+  next.avgBps = Number.isFinite(avgBps) ? avgBps : 0
+  next.etaSec = avgBps > 0 && total > uploaded ? Math.ceil((total - uploaded) / avgBps) : 0
+
+  uploadProgress.set(id, {
+    ...next
+  })
+}
+
+function cleanupUploadProgress(id, delayMs = 5 * 60 * 1000) {
+  if (!id) return
+  setTimeout(() => {
+    uploadProgress.delete(id)
+  }, delayMs)
+}
+
 
 function normalizeProvider(value) {
   return String(value || "").trim().toLowerCase()
@@ -47,6 +92,7 @@ function normalizeEmail(value) {
 function makeAccountKey(provider, email) {
   return normalizeProvider(provider) + "::" + normalizeEmail(email)
 }
+// Upsert account by provider and email
 
 function upsertAccount(account) {
   const key = makeAccountKey(account.provider, account.email)
@@ -179,6 +225,47 @@ function getMegaNodeById(storage, nodeId) {
   return storage.files[nodeId] || null
 }
 
+async function ensureMegaStorageForAccount(account) {
+  if (!account || normalizeProvider(account.provider) !== "mega") {
+    throw new Error("Invalid MEGA account")
+  }
+
+  const tryReload = async (storage) => {
+    if (!storage) return null
+    await storage.reload(true)
+    storage.status = "ready"
+    return storage
+  }
+
+  try {
+    const live = await tryReload(account.storage)
+    if (live) {
+      account.storage = live
+      return live
+    }
+  } catch (e) {
+    account.storage = null
+  }
+
+  const rawSession = account.megaSessionToken
+  const parsed = typeof rawSession === "string" ? parseMegaSessionToken(rawSession) : null
+  if (parsed) {
+    const restored = mega.Storage.fromJSON(parsed)
+    await restored.reload(true)
+    restored.status = "ready"
+    account.storage = restored
+    return restored
+  }
+
+  if (MEGA_SESSION_TOKEN) {
+    const fallback = await getMegaStorage()
+    account.storage = fallback
+    return fallback
+  }
+
+  throw new Error("MEGA session expired. Reconnect the account.")
+}
+
 function escapeDriveQueryId(id) {
   return String(id).replace(/\\/g, "\\\\").replace(/'/g, "\\'")
 }
@@ -214,7 +301,13 @@ async function getMegaStorage() {
 async function connectMegaAccount() {
   const storage = await getMegaStorage()
   const email = buildMegaEmail(storage)
-  upsertAccount({ provider: "mega", email, storage })
+  const snapshot = storage.toJSON ? storage.toJSON() : null
+  upsertAccount({
+    provider: "mega",
+    email,
+    storage,
+    megaSessionToken: snapshot ? JSON.stringify(snapshot) : MEGA_SESSION_TOKEN
+  })
   return email
 }
 
@@ -233,7 +326,13 @@ async function connectMegaAccountWithCredentials({ email, password, secondFactor
 
   await storage.ready
   const accountEmail = normalizeEmail(email)
-  upsertAccount({ provider: "mega", email: accountEmail, storage })
+  const snapshot = storage.toJSON ? storage.toJSON() : null
+  upsertAccount({
+    provider: "mega",
+    email: accountEmail,
+    storage,
+    megaSessionToken: snapshot ? JSON.stringify(snapshot) : ""
+  })
   return accountEmail
 }
 
@@ -331,7 +430,8 @@ async function listSharedDrives(accessToken) {
       headers: authHeaders(accessToken),
       params
     })
-
+ 
+    
     drives.push(...(response.data.drives || []))
     pageToken = response.data.nextPageToken || null
   } while (pageToken)
@@ -353,7 +453,11 @@ async function listMegaChildren(storage, parentId) {
   await storage.reload(true)
 
   const parentNode = parentId === "root" ? storage.root : getMegaNodeById(storage, parentId)
-  if (!parentNode || !parentNode.directory) return []
+  if (!parentNode || !parentNode.directory) {
+    const err = new Error("Destination folder not found")
+    err.statusCode = 404
+    throw err
+  }
 
   const children = Array.isArray(parentNode.children) ? parentNode.children : []
   return children.map((node) => normalizeMegaNode(node, parentNode.nodeId || "root"))
@@ -454,7 +558,7 @@ app.get("/storage", async (req, res) => {
 
     for (const account of accounts) {
       if (account.provider === "mega") {
-        const storage = account.storage || (await getMegaStorage())
+        const storage = await ensureMegaStorageForAccount(account)
         const info = await storage.getAccountInfo()
         const email = account.email || buildMegaEmail(storage)
         const givenName = getFirstNameFromEmail(email)
@@ -546,7 +650,7 @@ app.get("/files", async (req, res) => {
     }
 
     if (account.provider === "mega") {
-      const items = await listMegaChildren(account.storage || (await getMegaStorage()), parentId)
+      const items = await listMegaChildren(await ensureMegaStorageForAccount(account), parentId)
       return res.json({ parentId, items })
     }
 
@@ -578,7 +682,7 @@ app.get("/open-file", async (req, res) => {
     }
 
     if (account.provider === "mega") {
-      const storage = account.storage || (await getMegaStorage())
+      const storage = await ensureMegaStorageForAccount(account)
       await storage.reload(true)
       const node = getMegaNodeById(storage, fileId)
       if (!node) {
@@ -625,7 +729,7 @@ app.get("/search", async (req, res) => {
 
     const tasks = accounts.map(async (account) => {
       if (account.provider === "mega") {
-        const storage = account.storage || (await getMegaStorage())
+        const storage = await ensureMegaStorageForAccount(account)
         await storage.reload(true)
         const needle = query.toLowerCase()
 
@@ -682,13 +786,14 @@ app.post("/delete-item", async (req, res) => {
     }
 
     if (account.provider === "mega") {
-      const storage = account.storage || (await getMegaStorage())
+      const storage = await ensureMegaStorageForAccount(account)
       await storage.reload(true)
       const node = getMegaNodeById(storage, fileId)
       if (!node) {
         return res.status(404).json({ error: "File not found" })
       }
       await node.delete(true)
+      await storage.reload(true)
       return res.json({ success: true })
     }
 
@@ -720,7 +825,7 @@ app.post("/copy-item", async (req, res) => {
     }
 
     if (account.provider === "mega") {
-      const storage = account.storage || (await getMegaStorage())
+      const storage = await ensureMegaStorageForAccount(account)
       await storage.reload(true)
       const source = getMegaNodeById(storage, fileId)
       const target = destinationFolderId === "root" ? storage.root : getMegaNodeById(storage, destinationFolderId)
@@ -766,7 +871,7 @@ app.post("/move-item", async (req, res) => {
     }
 
     if (account.provider === "mega") {
-      const storage = account.storage || (await getMegaStorage())
+      const storage = await ensureMegaStorageForAccount(account)
       await storage.reload(true)
       const source = getMegaNodeById(storage, fileId)
       const target = destinationFolderId === "root" ? storage.root : getMegaNodeById(storage, destinationFolderId)
@@ -798,16 +903,227 @@ app.post("/move-item", async (req, res) => {
   }
 })
 
+// Streaming upload route - handles large files without RAM buffering
+app.post("/upload-item-stream", async (req, res) => {
+  const bb = busboy({
+    headers: req.headers,
+    limits: { fileSize: 10 * 1024 * 1024 * 1024 }
+  })
+
+  const fields = {}
+  let responded = false
+
+  function safeRespond(status, body) {
+    if (responded) return
+    responded = true
+    res.status(status).json(body)
+  }
+
+  bb.on("field", (name, val) => {
+    fields[name] = String(val).trim()
+  })
+
+  bb.on("file", async (_fieldname, fileStream, info) => {
+    const email = fields.email || getQueryTrimmed({ query: req.headers }, "x-upload-email")
+    const provider = fields.provider || getQueryTrimmed({ query: req.headers }, "x-upload-provider")
+    const parentId = fields.parentId || getQueryTrimmed({ query: req.headers }, "x-upload-parent-id")
+    const uploadId = fields.uploadId || getQueryTrimmed({ query: req.headers }, "x-upload-id")
+    const fileName = info.filename || "upload.bin"
+    const fileMime = info.mimeType || "application/octet-stream"
+    const fileSize = parseInt(req.headers["x-file-size"] || "0", 10) || 0
+
+    if (!email || !parentId) {
+      fileStream.resume()
+      return safeRespond(400, { error: "email and parentId are required" })
+    }
+
+    const account = getAccountByEmail(email, provider)
+    if (!account) {
+      fileStream.resume()
+      return safeRespond(404, { error: "Account not found" })
+    }
+
+    setUploadProgress(uploadId, {
+      status: "uploading",
+      phase: "initiating",
+      provider: normalizeProvider(account.provider),
+      fileName,
+      bytesUploaded: 0,
+      bytesTotal: fileSize,
+      message: "Preparing upload"
+    })
+
+    if (account.provider === "mega") {
+      try {
+        const storage = await ensureMegaStorageForAccount(account)
+        await storage.reload(true)
+
+        const targetFolder =
+          parentId === "root" ? storage.root : getMegaNodeById(storage, parentId)
+
+        if (!targetFolder || !targetFolder.directory) {
+          fileStream.resume()
+          return safeRespond(404, { error: "Destination folder not found" })
+        }
+
+        if (!fileSize || fileSize <= 0) {
+          fileStream.resume()
+          return safeRespond(400, { error: "x-file-size header is required for MEGA stream upload" })
+        }
+
+        setUploadProgress(uploadId, {
+          status: "uploading",
+          phase: "mega",
+          bytesUploaded: 0,
+          bytesTotal: fileSize,
+          message: "Uploading to MEGA"
+        })
+
+        const uploadStream = targetFolder.upload(
+          { name: fileName, size: fileSize, allowUploadBuffering: false },
+          fileStream
+        )
+        uploadStream.on("progress", (p) => {
+          const megaUploaded = Number(p?.bytesUploaded || 0)
+          const megaTotal = Number(p?.bytesTotal || fileSize)
+          setUploadProgress(uploadId, {
+            status: "uploading",
+            phase: "mega",
+            bytesUploaded: Math.max(0, Math.min(fileSize, megaUploaded)),
+            bytesTotal: Math.max(fileSize, megaTotal),
+            message: "Uploading to MEGA"
+          })
+        })
+
+        uploadStream.on("error", (err) => {
+          setUploadProgress(uploadId, {
+            status: "error",
+            phase: "error",
+            message: err && err.message ? err.message : "MEGA upload stream error"
+          })
+        })
+
+        await uploadStream.complete
+
+        setUploadProgress(uploadId, {
+          status: "done",
+          phase: "done",
+          bytesUploaded: fileSize,
+          bytesTotal: fileSize,
+          message: "Upload complete"
+        })
+        cleanupUploadProgress(uploadId)
+        return safeRespond(200, { success: true })
+      } catch (err) {
+        setUploadProgress(uploadId, { status: "error", phase: "error", message: err.message })
+        cleanupUploadProgress(uploadId, 60000)
+        logError(err)
+        return safeRespond(500, { error: err.message || "MEGA upload failed" })
+      }
+    }
+
+    try {
+      const metadata = { name: fileName, parents: [parentId] }
+
+      const startRes = await axios.post(DRIVE_UPLOAD_URL, metadata, {
+        headers: {
+          ...authHeaders(account.token),
+          "Content-Type": "application/json; charset=UTF-8",
+          "X-Upload-Content-Type": fileMime,
+          ...(fileSize ? { "X-Upload-Content-Length": String(fileSize) } : {})
+        },
+        params: {
+          uploadType: "resumable",
+          supportsAllDrives: true,
+          fields: "id,name,mimeType,size,modifiedTime,webViewLink,parents,driveId"
+        }
+      })
+
+      const resumableUrl = startRes.headers.location || startRes.headers.Location
+      if (!resumableUrl) {
+        fileStream.resume()
+        return safeRespond(500, { error: "Could not start Google upload session" })
+      }
+
+      setUploadProgress(uploadId, {
+        status: "uploading",
+        phase: "google",
+        bytesUploaded: 0,
+        bytesTotal: fileSize,
+        message: "Streaming to Google Drive"
+      })
+
+      let bytesUploaded = 0
+      fileStream.on("data", (chunk) => {
+        bytesUploaded += chunk.length
+        setUploadProgress(uploadId, {
+          bytesUploaded,
+          bytesTotal: fileSize || bytesUploaded,
+          message: "Streaming to Google Drive"
+        })
+      })
+
+      const uploadRes = await axios.put(resumableUrl, fileStream, {
+        headers: {
+          "Content-Type": fileMime,
+          ...(fileSize
+            ? { "Content-Length": String(fileSize) }
+            : { "Transfer-Encoding": "chunked" })
+        },
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity
+      })
+
+      const doneBytes = Math.max(bytesUploaded, fileSize, 0)
+      setUploadProgress(uploadId, {
+        status: "done",
+        phase: "done",
+        bytesUploaded: doneBytes,
+        bytesTotal: fileSize || doneBytes,
+        message: "Upload complete"
+      })
+      cleanupUploadProgress(uploadId)
+      return safeRespond(200, { success: true, item: uploadRes.data })
+    } catch (err) {
+      setUploadProgress(uploadId, { status: "error", phase: "error", message: err.message })
+      cleanupUploadProgress(uploadId, 60000)
+      logError(err)
+      return safeRespond(500, { error: err.message || "Google Drive upload failed" })
+    }
+  })
+
+  bb.on("error", (err) => {
+    logError(err)
+    if (!responded) {
+      responded = true
+      res.status(500).json({ error: "Multipart parse error: " + err.message })
+    }
+  })
+
+  req.pipe(bb)
+})
+
 app.post("/upload-item", upload.single("file"), async (req, res) => {
   try {
     const email = getBodyTrimmed(req, "email")
     const provider = getBodyTrimmed(req, "provider")
     const parentId = getBodyTrimmed(req, "parentId")
+    const uploadId = getBodyTrimmed(req, "uploadId")
     const file = req.file
 
     if (!email || !parentId || !file) {
       return res.status(400).json({ error: "email, parentId and file are required" })
     }
+
+    setUploadProgress(uploadId, {
+      status: "received",
+      phase: "server",
+      provider: normalizeProvider(provider),
+      fileName: file.originalname || "upload.bin",
+      bytesUploaded: 0,
+      bytesTotal: Number(file.size || 0),
+      message: "File received by server"
+    })
 
     const account = getAccountByEmail(email, provider)
     if (!account) {
@@ -815,7 +1131,7 @@ app.post("/upload-item", upload.single("file"), async (req, res) => {
     }
 
     if (account.provider === "mega") {
-      const storage = account.storage || (await getMegaStorage())
+      const storage = await ensureMegaStorageForAccount(account)
       await storage.reload(true)
       const targetFolder = parentId === "root" ? storage.root : getMegaNodeById(storage, parentId)
       if (!targetFolder || !targetFolder.directory) {
@@ -823,44 +1139,131 @@ app.post("/upload-item", upload.single("file"), async (req, res) => {
       }
 
       const uploadStream = targetFolder.upload({ name: file.originalname || "upload.bin" }, file.buffer)
+      setUploadProgress(uploadId, {
+        status: "uploading",
+        phase: "mega",
+        bytesUploaded: 0,
+        bytesTotal: Number(file.size || 0),
+        message: "Uploading to MEGA"
+      })
+      uploadStream.on("progress", (p) => {
+        const up = Number(p && p.bytesUploaded ? p.bytesUploaded : 0)
+        const total = Number(p && p.bytesTotal ? p.bytesTotal : file.size || 0)
+        setUploadProgress(uploadId, {
+          status: "uploading",
+          phase: "mega",
+          bytesUploaded: up,
+          bytesTotal: total,
+          message: "Uploading to MEGA"
+        })
+      })
       await uploadStream.complete
+      setUploadProgress(uploadId, {
+        status: "done",
+        phase: "done",
+        bytesUploaded: Number(file.size || 0),
+        bytesTotal: Number(file.size || 0),
+        message: "Upload complete"
+      })
+      cleanupUploadProgress(uploadId)
       return res.json({ success: true })
     }
 
-    const boundary = "multidrive_boundary_" + Date.now()
     const metadata = {
       name: file.originalname || "upload.bin",
       parents: [parentId]
     }
 
-    const prefix =
-      `--${boundary}\r\n` +
-      "Content-Type: application/json; charset=UTF-8\r\n\r\n" +
-      JSON.stringify(metadata) +
-      `\r\n--${boundary}\r\n` +
-      `Content-Type: ${file.mimetype || "application/octet-stream"}\r\n\r\n`
-
-    const suffix = `\r\n--${boundary}--`
-    const body = Buffer.concat([Buffer.from(prefix, "utf8"), file.buffer, Buffer.from(suffix, "utf8")])
-
-    const response = await axios.post(DRIVE_UPLOAD_URL, body, {
+    // Google upload path: initiate resumable session, then stream media bytes to Drive.
+    // This avoids local disk storage and sends bytes directly to Google.
+    const startRes = await axios.post(DRIVE_UPLOAD_URL, metadata, {
       headers: {
         ...authHeaders(account.token),
-        "Content-Type": `multipart/related; boundary=${boundary}`
+        "Content-Type": "application/json; charset=UTF-8",
+        "X-Upload-Content-Type": file.mimetype || "application/octet-stream",
+        "X-Upload-Content-Length": String(Number(file.size || 0))
       },
       params: {
-        uploadType: "multipart",
+        uploadType: "resumable",
         supportsAllDrives: true,
         fields: "id,name,mimeType,size,modifiedTime,webViewLink,parents,driveId"
       }
     })
+    const resumableUrl = startRes.headers && (startRes.headers.location || startRes.headers.Location)
+    if (!resumableUrl) {
+      return res.status(500).json({ error: "Could not start Google upload session" })
+    }
 
+    setUploadProgress(uploadId, {
+      status: "uploading",
+      phase: "google",
+      bytesUploaded: 0,
+      bytesTotal: Number(file.size || 0),
+      message: "Uploading to Google Drive"
+    })
+
+    const response = await axios.put(resumableUrl, file.buffer, {
+      headers: {
+        "Content-Type": file.mimetype || "application/octet-stream",
+        "Content-Length": String(Number(file.size || 0))
+      },
+      onUploadProgress: (ev) => {
+        const loaded = Number(ev && ev.loaded ? ev.loaded : 0)
+        const total = Number(ev && ev.total ? ev.total : file.size || 0)
+        setUploadProgress(uploadId, {
+          status: "uploading",
+          phase: "google",
+          bytesUploaded: loaded,
+          bytesTotal: total,
+          message: "Uploading to Google Drive"
+        })
+      }
+    })
+
+    setUploadProgress(uploadId, {
+      status: "done",
+      phase: "done",
+      bytesUploaded: Number(file.size || 0),
+      bytesTotal: Number(file.size || 0),
+      message: "Upload complete"
+    })
+    cleanupUploadProgress(uploadId)
     res.json({ success: true, item: response.data })
   } catch (err) {
+    const uploadId = getBodyTrimmed(req, "uploadId")
+    setUploadProgress(uploadId, {
+      status: "error",
+      phase: "error",
+      message: err && err.message ? err.message : "Upload failed"
+    })
+    cleanupUploadProgress(uploadId, 60 * 1000)
     sendErrorJson(res, err, "Error uploading file")
   }
+})
+
+app.get("/upload-progress", (req, res) => {
+  const uploadId = getQueryTrimmed(req, "uploadId")
+  if (!uploadId) {
+    return res.status(400).json({ error: "uploadId is required" })
+  }
+  const state = uploadProgress.get(uploadId)
+  if (!state) {
+    return res.json({ status: "unknown" })
+  }
+  res.json(state)
+})
+
+app.use((err, req, res, next) => {
+  if (err && err.code === "LIMIT_FILE_SIZE") {
+    return res.status(413).json({ error: "File too large. Max upload size is 1 GB." })
+  }
+  if (err) {
+    return res.status(500).json({ error: err.message || "Server error" })
+  }
+  next()
 })
 
 app.listen(3000, () => {
   console.log("Server running on http://localhost:3000")
 })
+
