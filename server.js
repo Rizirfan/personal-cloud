@@ -287,6 +287,26 @@ function upsertAccount(session, account) {
   session.accounts.push(account)
 }
 
+function exportSessionAccountsForClient(session) {
+  const list = Array.isArray(session?.accounts) ? session.accounts : []
+  return list.map((account) => {
+    const provider = normalizeProvider(account.provider)
+    const email = normalizeEmail(account.email)
+    if (provider === "mega") {
+      return {
+        provider,
+        email,
+        megaSessionToken: typeof account.megaSessionToken === "string" ? account.megaSessionToken : ""
+      }
+    }
+    return {
+      provider,
+      email,
+      token: typeof account.token === "string" ? account.token : ""
+    }
+  }).filter((item) => item.email && item.provider)
+}
+
 function parseMegaSessionToken(raw) {
   if (!raw || typeof raw !== "string") return null
 
@@ -894,6 +914,54 @@ app.post("/logout", (req, res) => {
 
   req.saveUserSession().catch(() => { })
   res.json({ success: true })
+})
+
+app.get("/session/export", (req, res) => {
+  try {
+    return res.json({ accounts: exportSessionAccountsForClient(req.userSession) })
+  } catch (err) {
+    logError(err)
+    return res.status(500).json({ error: "Unable to export session" })
+  }
+})
+
+app.post("/session/restore", async (req, res) => {
+  try {
+    const source = Array.isArray(req.body?.accounts) ? req.body.accounts : []
+    const restored = []
+    for (const raw of source) {
+      const provider = normalizeProvider(raw?.provider)
+      const email = normalizeEmail(raw?.email)
+      if (!provider || !email) continue
+
+      if (provider === "mega") {
+        const megaSessionToken = typeof raw?.megaSessionToken === "string" ? raw.megaSessionToken.trim() : ""
+        if (!megaSessionToken) continue
+        upsertAccount(req.userSession, {
+          provider: "mega",
+          email,
+          megaSessionToken
+        })
+        restored.push({ provider: "mega", email })
+        continue
+      }
+
+      const token = typeof raw?.token === "string" ? raw.token.trim() : ""
+      if (!token) continue
+      upsertAccount(req.userSession, {
+        provider: "google",
+        email,
+        token
+      })
+      restored.push({ provider: "google", email })
+    }
+
+    await req.saveUserSession()
+    return res.json({ success: true, restored })
+  } catch (err) {
+    logError(err)
+    return res.status(500).json({ error: "Unable to restore session" })
+  }
 })
 
 app.get("/files", async (req, res) => {

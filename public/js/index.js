@@ -4,6 +4,7 @@ const SEARCH_HISTORY_STORAGE_KEY = "multidrive-search-history";
 const SEARCH_HISTORY_MAX = 7;
 const GOOGLE_CLIENT_ID_STORAGE_KEY = "multidrive-google-client-id";
 const GOOGLE_CLIENT_SECRET_STORAGE_KEY = "multidrive-google-client-secret";
+const BROWSER_ACCOUNTS_CACHE_KEY = "multidrive-browser-accounts-v1";
 
 function getSearchHistory() {
   try {
@@ -29,6 +30,47 @@ function saveSearchHistoryTerm(term) {
     ),
   ].slice(0, SEARCH_HISTORY_MAX);
   localStorage.setItem(SEARCH_HISTORY_STORAGE_KEY, JSON.stringify(next));
+}
+
+function readBrowserAccountsCache() {
+  try {
+    const raw = localStorage.getItem(BROWSER_ACCOUNTS_CACHE_KEY);
+    const parsed = JSON.parse(raw || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function writeBrowserAccountsCache(accounts) {
+  try {
+    localStorage.setItem(
+      BROWSER_ACCOUNTS_CACHE_KEY,
+      JSON.stringify(Array.isArray(accounts) ? accounts : []),
+    );
+  } catch (e) {}
+}
+
+async function restoreSessionFromBrowserCache() {
+  const cached = readBrowserAccountsCache();
+  if (!cached.length) return;
+  try {
+    await fetch("/session/restore", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accounts: cached }),
+    });
+  } catch (e) {}
+}
+
+async function syncBrowserAccountsCacheFromServer() {
+  try {
+    const res = await fetch("/session/export", { cache: "no-store" });
+    const payload = await res.json();
+    writeBrowserAccountsCache(
+      payload && Array.isArray(payload.accounts) ? payload.accounts : [],
+    );
+  } catch (e) {}
 }
 
 function connectDrive() {
@@ -2403,12 +2445,13 @@ ${usedFormatted} / ${limitFormatted} (${percent}% Used)
   try {
     setGreetingFromSavedName();
   } catch (e) { }
+  syncBrowserAccountsCacheFromServer();
 }
 
 initFirstVisitNamePrompt();
-loadStorage();
+restoreSessionFromBrowserCache().finally(loadStorage);
 window.addEventListener("pageshow", function () {
-  loadStorage();
+  restoreSessionFromBrowserCache().finally(loadStorage);
 });
 
 document
