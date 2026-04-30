@@ -5,6 +5,7 @@ const path = require("path")
 const multer = require("multer")
 const busboy = require("busboy")
 const mega = require("megajs")
+const crypto = require("crypto")
 require("dotenv").config()
 
 const app = express()
@@ -16,6 +17,10 @@ const upload = multer({
 app.use(cors())
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
+app.use((req, res, next) => {
+  getOrCreateSession(req, res)
+  next()
+})
 
 app.use((req, res, next) => {
   if (req.path === "/upload-item-stream" || req.path === "/upload-item") {
@@ -46,10 +51,76 @@ const FOLDER_MIME = "application/vnd.google-apps.folder"
 const DRIVE_FILES_FIELDS = "nextPageToken, files(id, name, mimeType, size, modifiedTime, webViewLink, iconLink, thumbnailLink, parents, driveId)"
 
 
-let accounts = []
 let megaStorage = null
 const uploadProgress = new Map()
-const googleOauthStates = new Map()
+const sessions = new Map()
+const SESSION_COOKIE_NAME = "md_sid"
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000
+const SESSION_CLEANUP_MS = 60 * 60 * 1000
+
+function parseCookies(header) {
+  const out = {}
+  const raw = String(header || "")
+  if (!raw) return out
+  raw.split(";").forEach((part) => {
+    const i = part.indexOf("=")
+    if (i <= 0) return
+    const key = part.slice(0, i).trim()
+    const val = part.slice(i + 1).trim()
+    if (!key) return
+    out[key] = decodeURIComponent(val)
+  })
+  return out
+}
+
+function makeSessionId() {
+  return crypto.randomBytes(24).toString("base64url")
+}
+
+function getOrCreateSession(req, res) {
+  const cookies = parseCookies(req.headers?.cookie)
+  let sid = String(cookies[SESSION_COOKIE_NAME] || "").trim()
+  let session = sid ? sessions.get(sid) : null
+
+  if (!session) {
+    sid = makeSessionId()
+    session = {
+      id: sid,
+      createdAt: Date.now(),
+      lastSeenAt: Date.now(),
+      accounts: [],
+      oauthStates: new Map()
+    }
+    sessions.set(sid, session)
+    const cookieParts = [
+      `${SESSION_COOKIE_NAME}=${encodeURIComponent(sid)}`,
+      "Path=/",
+      "HttpOnly",
+      "SameSite=Lax",
+      `Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}`
+    ]
+    if ((req.headers["x-forwarded-proto"] || req.protocol) === "https") {
+      cookieParts.push("Secure")
+    }
+    res.setHeader("Set-Cookie", cookieParts.join("; "))
+  } else {
+    session.lastSeenAt = Date.now()
+  }
+
+  req.sessionId = sid
+  req.userSession = session
+}
+
+function cleanupSessions() {
+  const now = Date.now()
+  for (const [sid, session] of sessions.entries()) {
+    if (!session || now - Number(session.lastSeenAt || 0) > SESSION_TTL_MS) {
+      sessions.delete(sid)
+    }
+  }
+}
+
+setInterval(cleanupSessions, SESSION_CLEANUP_MS).unref()
 
 function setUploadProgress(id, patch) {
   if (!id) return
@@ -98,10 +169,12 @@ function makeAccountKey(provider, email) {
 }
 // Upsert account by provider and email
 
-function upsertAccount(account) {
+function upsertAccount(session, account) {
+  if (!session) return
   const key = makeAccountKey(account.provider, account.email)
-  accounts = accounts.filter((item) => makeAccountKey(item.provider, item.email) !== key)
-  accounts.push(account)
+  const current = Array.isArray(session.accounts) ? session.accounts : []
+  session.accounts = current.filter((item) => makeAccountKey(item.provider, item.email) !== key)
+  session.accounts.push(account)
 }
 
 function parseMegaSessionToken(raw) {
@@ -208,11 +281,12 @@ function makeOAuthStateToken() {
   return "g_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 10)
 }
 
-function cleanupOAuthStates() {
+function cleanupOAuthStates(session) {
+  if (!session || !session.oauthStates) return
   const now = Date.now()
-  for (const [key, value] of googleOauthStates.entries()) {
+  for (const [key, value] of session.oauthStates.entries()) {
     if (!value || now - Number(value.createdAt || 0) > 15 * 60 * 1000) {
-      googleOauthStates.delete(key)
+      session.oauthStates.delete(key)
     }
   }
 }
@@ -232,9 +306,11 @@ function sendErrorJson(res, err, fallbackMessage) {
   res.status(status).json({ error: message })
 }
 
-function getAccountByEmail(email, provider) {
+function getAccountByEmail(session, email, provider) {
+  if (!session) return null
   const target = normalizeEmail(email)
   const targetProvider = normalizeProvider(provider)
+  const accounts = Array.isArray(session.accounts) ? session.accounts : []
 
   return accounts.find((account) => {
     const sameEmail = normalizeEmail(account.email) === target
@@ -322,11 +398,11 @@ async function getMegaStorage() {
   return storage
 }
 
-async function connectMegaAccount() {
+async function connectMegaAccount(session) {
   const storage = await getMegaStorage()
   const email = buildMegaEmail(storage)
   const snapshot = storage.toJSON ? storage.toJSON() : null
-  upsertAccount({
+  upsertAccount(session, {
     provider: "mega",
     email,
     storage,
@@ -335,7 +411,7 @@ async function connectMegaAccount() {
   return email
 }
 
-async function connectMegaAccountWithCredentials({ email, password, secondFactorCode }) {
+async function connectMegaAccountWithCredentials(session, { email, password, secondFactorCode }) {
   if (!email || !password) {
     throw new Error("MEGA email and password are required")
   }
@@ -351,7 +427,7 @@ async function connectMegaAccountWithCredentials({ email, password, secondFactor
   await storage.ready
   const accountEmail = normalizeEmail(email)
   const snapshot = storage.toJSON ? storage.toJSON() : null
-  upsertAccount({
+  upsertAccount(session, {
     provider: "mega",
     email: accountEmail,
     storage,
@@ -493,7 +569,7 @@ app.get("/auth/google", (req, res) => {
 
 app.post("/auth/google/start", (req, res) => {
   try {
-    cleanupOAuthStates()
+    cleanupOAuthStates(req.userSession)
     const customClientId = getBodyTrimmed(req, "clientId")
     const customClientSecret = getBodyTrimmed(req, "clientSecret")
     if (!customClientId || !customClientSecret) {
@@ -504,7 +580,7 @@ app.post("/auth/google/start", (req, res) => {
 
     const redirectUri = resolveRedirectUri(req)
     const state = makeOAuthStateToken()
-    googleOauthStates.set(state, {
+    req.userSession.oauthStates.set(state, {
       clientId,
       clientSecret,
       redirectUri,
@@ -529,7 +605,7 @@ app.post("/auth/mega/login", async (req, res) => {
     const email = getBodyTrimmed(req, "email")
     const password = getBodyRaw(req, "password")
     const secondFactorCode = getBodyTrimmed(req, "secondFactorCode")
-    await connectMegaAccountWithCredentials({ email, password, secondFactorCode })
+    await connectMegaAccountWithCredentials(req.userSession, { email, password, secondFactorCode })
     res.redirect("/")
   } catch (err) {
     const msg = err && err.message ? err.message : "Unable to login to MEGA"
@@ -542,7 +618,7 @@ app.post("/auth/mega/login-json", async (req, res) => {
     const email = getBodyTrimmed(req, "email")
     const password = getBodyRaw(req, "password")
     const secondFactorCode = getBodyTrimmed(req, "secondFactorCode")
-    const accountEmail = await connectMegaAccountWithCredentials({ email, password, secondFactorCode })
+    const accountEmail = await connectMegaAccountWithCredentials(req.userSession, { email, password, secondFactorCode })
     return res.json({ success: true, email: accountEmail })
   } catch (err) {
     const msg = err && err.message ? err.message : "Unable to login to MEGA"
@@ -551,7 +627,7 @@ app.post("/auth/mega/login-json", async (req, res) => {
 })
 
 app.post("/auth/mega/token", (req, res) => {
-  connectMegaAccount()
+  connectMegaAccount(req.userSession)
     .then(() => {
       res.redirect("/")
     })
@@ -563,7 +639,7 @@ app.post("/auth/mega/token", (req, res) => {
 
 app.post("/auth/mega/token-json", async (req, res) => {
   try {
-    const email = await connectMegaAccount()
+    const email = await connectMegaAccount(req.userSession)
     return res.json({ success: true, email })
   } catch (err) {
     const msg = err && err.message ? err.message : "Unable to connect MEGA token"
@@ -575,13 +651,13 @@ app.get("/auth/google/callback", async (req, res) => {
   try {
     const code = req.query.code
     const state = getQueryTrimmed(req, "state")
-    cleanupOAuthStates()
+    cleanupOAuthStates(req.userSession)
 
-    if (!state || !googleOauthStates.has(state)) {
+    if (!state || !req.userSession.oauthStates.has(state)) {
       return res.status(400).send("OAuth session expired. Start Google sign-in again.")
     }
-    const stateData = googleOauthStates.get(state)
-    googleOauthStates.delete(state)
+    const stateData = req.userSession.oauthStates.get(state)
+    req.userSession.oauthStates.delete(state)
     const oauthClientId = stateData.clientId
     const oauthClientSecret = stateData.clientSecret
     const oauthRedirectUri = stateData.redirectUri || resolveRedirectUri(req)
@@ -599,7 +675,7 @@ app.get("/auth/google/callback", async (req, res) => {
       headers: authHeaders(accessToken)
     })
 
-    upsertAccount({
+    upsertAccount(req.userSession, {
       provider: "google",
       email: profileResponse.data.email,
       token: accessToken
@@ -617,7 +693,8 @@ app.get("/storage", async (req, res) => {
   try {
     const results = []
 
-    for (const account of accounts) {
+    const sessionAccounts = Array.isArray(req.userSession.accounts) ? req.userSession.accounts : []
+    for (const account of sessionAccounts) {
       if (account.provider === "mega") {
         const storage = await ensureMegaStorageForAccount(account)
         const info = await storage.getAccountInfo()
@@ -680,15 +757,16 @@ app.post("/logout", (req, res) => {
     return res.status(400).json({ error: "Email is required" })
   }
 
-  const previousLength = accounts.length
-  accounts = accounts.filter((account) => {
+  const sessionAccounts = Array.isArray(req.userSession.accounts) ? req.userSession.accounts : []
+  const previousLength = sessionAccounts.length
+  req.userSession.accounts = sessionAccounts.filter((account) => {
     const sameEmail = normalizeEmail(account.email) === normalizeEmail(email)
     if (!sameEmail) return true
     if (provider) return normalizeProvider(account.provider) !== provider
     return false
   })
 
-  if (accounts.length === previousLength) {
+  if (req.userSession.accounts.length === previousLength) {
     return res.status(404).json({ error: "Account not found" })
   }
 
@@ -705,7 +783,7 @@ app.get("/files", async (req, res) => {
     }
 
     const parentId = getQueryTrimmed(req, "parentId") || "root"
-    const account = getAccountByEmail(email, provider)
+    const account = getAccountByEmail(req.userSession, email, provider)
     if (!account) {
       return res.status(404).json({ error: "Account not found" })
     }
@@ -737,7 +815,7 @@ app.get("/open-file", async (req, res) => {
       return res.status(400).json({ error: "Query parameters email and fileId are required" })
     }
 
-    const account = getAccountByEmail(email, provider)
+    const account = getAccountByEmail(req.userSession, email, provider)
     if (!account) {
       return res.status(404).json({ error: "Account not found" })
     }
@@ -781,14 +859,15 @@ app.get("/search", async (req, res) => {
       return res.status(400).json({ error: "Query parameter q is required" })
     }
 
-    if (accounts.length === 0) {
+    const sessionAccounts = Array.isArray(req.userSession.accounts) ? req.userSession.accounts : []
+    if (sessionAccounts.length === 0) {
       return res.json({ query, results: [] })
     }
 
     const escapedQuery = escapeDriveContains(query)
     const driveQuery = `name contains '${escapedQuery}' and trashed=false`
 
-    const tasks = accounts.map(async (account) => {
+    const tasks = sessionAccounts.map(async (account) => {
       if (account.provider === "mega") {
         const storage = await ensureMegaStorageForAccount(account)
         await storage.reload(true)
@@ -841,7 +920,7 @@ app.post("/delete-item", async (req, res) => {
       return res.status(400).json({ error: "email and fileId are required" })
     }
 
-    const account = getAccountByEmail(email, provider)
+    const account = getAccountByEmail(req.userSession, email, provider)
     if (!account) {
       return res.status(404).json({ error: "Account not found" })
     }
@@ -872,7 +951,7 @@ app.post("/copy-item", async (req, res) => {
       return res.status(400).json({ error: "email, fileId and destinationFolderId are required" })
     }
 
-    const account = getAccountByEmail(email, provider)
+    const account = getAccountByEmail(req.userSession, email, provider)
     if (!account) {
       return res.status(404).json({ error: "Account not found" })
     }
@@ -918,7 +997,7 @@ app.post("/move-item", async (req, res) => {
       return res.status(400).json({ error: "email, fileId and destinationFolderId are required" })
     }
 
-    const account = getAccountByEmail(email, provider)
+    const account = getAccountByEmail(req.userSession, email, provider)
     if (!account) {
       return res.status(404).json({ error: "Account not found" })
     }
@@ -971,7 +1050,7 @@ app.post("/create-folder", async (req, res) => {
       return res.status(400).json({ error: "Open a destination folder first" })
     }
 
-    const account = getAccountByEmail(email, provider)
+    const account = getAccountByEmail(req.userSession, email, provider)
     if (!account) {
       return res.status(404).json({ error: "Account not found" })
     }
@@ -1047,13 +1126,14 @@ app.post("/upload-item-stream", async (req, res) => {
       return safeRespond(400, { error: "email and parentId are required" })
     }
 
-    const account = getAccountByEmail(email, provider)
+    const account = getAccountByEmail(req.userSession, email, provider)
     if (!account) {
       fileStream.resume()
       return safeRespond(404, { error: "Account not found" })
     }
 
     setUploadProgress(uploadId, {
+      sessionId: req.sessionId,
       status: "uploading",
       phase: "initiating",
       provider: normalizeProvider(account.provider),
@@ -1226,6 +1306,7 @@ app.post("/upload-item", upload.single("file"), async (req, res) => {
     }
 
     setUploadProgress(uploadId, {
+      sessionId: req.sessionId,
       status: "received",
       phase: "server",
       provider: normalizeProvider(provider),
@@ -1235,7 +1316,7 @@ app.post("/upload-item", upload.single("file"), async (req, res) => {
       message: "File received by server"
     })
 
-    const account = getAccountByEmail(email, provider)
+    const account = getAccountByEmail(req.userSession, email, provider)
     if (!account) {
       return res.status(404).json({ error: "Account not found" })
     }
@@ -1357,7 +1438,7 @@ app.get("/upload-progress", (req, res) => {
     return res.status(400).json({ error: "uploadId is required" })
   }
   const state = uploadProgress.get(uploadId)
-  if (!state) {
+  if (!state || String(state.sessionId || "") !== String(req.sessionId || "")) {
     return res.json({ status: "unknown" })
   }
   res.json(state)
