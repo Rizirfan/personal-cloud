@@ -29,10 +29,12 @@ app.use("/images", express.static(path.join(__dirname, "images")))
 
 const CLIENT_ID = process.env.CLIENT_ID
 const CLIENT_SECRET = process.env.CLIENT_SECRET
-const REDIRECT_URI = "http://localhost:3000/auth/google/callback"
+const REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || "http://localhost:3000/auth/google/callback"
 const MEGA_SESSION_TOKEN = process.env.MEGA_SESSION_TOKEN || ""
 const MEGA_ACCOUNT_EMAIL = process.env.MEGA_ACCOUNT_EMAIL || ""
+const GOOGLE_OAUTH_SCOPE = ["openid", "email", "profile", "https://www.googleapis.com/auth/drive"].join(" ")
 
+//all the Google Drive API endpoints we will be using
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 const GOOGLE_PROFILE_URL = "https://www.googleapis.com/oauth2/v2/userinfo"
 const DRIVE_FILES_URL = "https://www.googleapis.com/drive/v3/files"
@@ -46,6 +48,7 @@ const DRIVE_FILES_FIELDS = "nextPageToken, files(id, name, mimeType, size, modif
 let accounts = []
 let megaStorage = null
 const uploadProgress = new Map()
+const googleOauthStates = new Map()
 
 function setUploadProgress(id, patch) {
   if (!id) return
@@ -57,7 +60,7 @@ function setUploadProgress(id, patch) {
     updatedAt: now
   }
 
-  if (!next.startedAt) { 
+  if (!next.startedAt) {
     next.startedAt = now
   }
 
@@ -109,7 +112,7 @@ function parseMegaSessionToken(raw) {
   const attempts = [text]
   try {
     attempts.push(Buffer.from(text, "base64").toString("utf8"))
-  } catch (e) {}
+  } catch (e) { }
 
   for (const candidate of attempts) {
     try {
@@ -117,7 +120,7 @@ function parseMegaSessionToken(raw) {
       if (parsed && typeof parsed === "object" && parsed.sid && parsed.key) {
         return parsed
       }
-    } catch (e) {}
+    } catch (e) { }
   }
 
   return null
@@ -191,6 +194,26 @@ function getBodyRaw(req, key) {
 function getQueryTrimmed(req, key) {
   const value = req.query?.[key]
   return typeof value === "string" ? value.trim() : ""
+}
+
+function resolveRedirectUri(req) {
+  if (REDIRECT_URI) return REDIRECT_URI
+  const proto = req.headers["x-forwarded-proto"] || req.protocol || "http"
+  const host = req.headers["x-forwarded-host"] || req.get("host")
+  return `${proto}://${host}/auth/google/callback`
+}
+
+function makeOAuthStateToken() {
+  return "g_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 10)
+}
+
+function cleanupOAuthStates() {
+  const now = Date.now()
+  for (const [key, value] of googleOauthStates.entries()) {
+    if (!value || now - Number(value.createdAt || 0) > 15 * 60 * 1000) {
+      googleOauthStates.delete(key)
+    }
+  }
 }
 
 function authHeaders(token) {
@@ -430,8 +453,8 @@ async function listSharedDrives(accessToken) {
       headers: authHeaders(accessToken),
       params
     })
- 
-    
+
+
     drives.push(...(response.data.drives || []))
     pageToken = response.data.nextPageToken || null
   } while (pageToken)
@@ -464,10 +487,36 @@ async function listMegaChildren(storage, parentId) {
 }
 
 app.get("/auth/google", (req, res) => {
-  const scope = ["openid", "email", "profile", "https://www.googleapis.com/auth/drive"].join(" ")
-  const url =
-    `https://accounts.google.com/o/oauth2/v2/auth?client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}&response_type=code&scope=${scope}&access_type=offline&prompt=consent`
-  res.redirect(url)
+  return res.status(400).send("Use /auth/google/start with custom Google OAuth credentials.")
+})
+
+app.post("/auth/google/start", (req, res) => {
+  try {
+    cleanupOAuthStates()
+    const customClientId = getBodyTrimmed(req, "clientId")
+    const customClientSecret = getBodyTrimmed(req, "clientSecret")
+    if (!customClientId || !customClientSecret) {
+      return res.status(400).json({ error: "Both Client ID and Client Secret are required." })
+    }
+    const clientId = customClientId
+    const clientSecret = customClientSecret
+
+    const redirectUri = resolveRedirectUri(req)
+    const state = makeOAuthStateToken()
+    googleOauthStates.set(state, {
+      clientId,
+      clientSecret,
+      redirectUri,
+      createdAt: Date.now()
+    })
+
+    const url =
+      `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(GOOGLE_OAUTH_SCOPE)}&access_type=offline&prompt=consent&state=${encodeURIComponent(state)}`
+    return res.json({ url })
+  } catch (err) {
+    logError(err)
+    return res.status(500).json({ error: "Unable to start Google login." })
+  }
 })
 
 app.get("/auth/mega", (req, res) => {
@@ -524,12 +573,23 @@ app.post("/auth/mega/token-json", async (req, res) => {
 app.get("/auth/google/callback", async (req, res) => {
   try {
     const code = req.query.code
+    const state = getQueryTrimmed(req, "state")
+    cleanupOAuthStates()
+
+    if (!state || !googleOauthStates.has(state)) {
+      return res.status(400).send("OAuth session expired. Start Google sign-in again.")
+    }
+    const stateData = googleOauthStates.get(state)
+    googleOauthStates.delete(state)
+    const oauthClientId = stateData.clientId
+    const oauthClientSecret = stateData.clientSecret
+    const oauthRedirectUri = stateData.redirectUri || resolveRedirectUri(req)
 
     const tokenResponse = await axios.post(GOOGLE_TOKEN_URL, {
       code,
-      client_id: CLIENT_ID,
-      client_secret: CLIENT_SECRET,
-      redirect_uri: REDIRECT_URI,
+      client_id: oauthClientId,
+      client_secret: oauthClientSecret,
+      redirect_uri: oauthRedirectUri,
       grant_type: "authorization_code"
     })
 
@@ -900,6 +960,63 @@ app.post("/move-item", async (req, res) => {
     res.json({ success: true })
   } catch (err) {
     sendErrorJson(res, err, "Error moving file")
+  }
+})
+
+app.post("/create-folder", async (req, res) => {
+  try {
+    const email = getBodyTrimmed(req, "email")
+    const provider = getBodyTrimmed(req, "provider")
+    const parentId = getBodyTrimmed(req, "parentId") || "root"
+    const folderName = getBodyTrimmed(req, "folderName")
+
+    if (!email || !folderName) {
+      return res.status(400).json({ error: "email and folderName are required" })
+    }
+
+    if (parentId === "__shared_drives__") {
+      return res.status(400).json({ error: "Open a destination folder first" })
+    }
+
+    const account = getAccountByEmail(email, provider)
+    if (!account) {
+      return res.status(404).json({ error: "Account not found" })
+    }
+
+    if (account.provider === "mega") {
+      const storage = await ensureMegaStorageForAccount(account)
+      await storage.reload(true)
+      const targetFolder = parentId === "root" ? storage.root : getMegaNodeById(storage, parentId)
+      if (!targetFolder || !targetFolder.directory) {
+        return res.status(404).json({ error: "Destination folder not found" })
+      }
+      const created = await targetFolder.mkdir(folderName)
+      await storage.reload(true)
+      return res.json({ success: true, item: normalizeMegaNode(created, targetFolder.nodeId || "root") })
+    }
+
+    const response = await axios.post(
+      DRIVE_FILES_URL,
+      {
+        name: folderName,
+        mimeType: FOLDER_MIME,
+        parents: [parentId]
+      },
+      {
+        headers: {
+          ...authHeaders(account.token),
+          "Content-Type": "application/json"
+        },
+        params: {
+          fields: "id,name,mimeType,size,modifiedTime,webViewLink,parents,driveId",
+          supportsAllDrives: true
+        }
+      }
+    )
+
+    return res.json({ success: true, item: response.data })
+  } catch (err) {
+    sendErrorJson(res, err, "Error creating folder")
   }
 })
 
