@@ -17,9 +17,18 @@ const upload = multer({
 app.use(cors())
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
-app.use((req, res, next) => {
-  getOrCreateSession(req, res)
-  next()
+app.use(async (req, res, next) => {
+  try {
+    await getOrCreateSession(req, res)
+    res.on("finish", () => {
+      if (typeof req.saveUserSession === "function") {
+        req.saveUserSession().catch(() => { })
+      }
+    })
+    next()
+  } catch (err) {
+    next(err)
+  }
 })
 
 app.use((req, res, next) => {
@@ -57,6 +66,10 @@ const sessions = new Map()
 const SESSION_COOKIE_NAME = "md_sid"
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000
 const SESSION_CLEANUP_MS = 60 * 60 * 1000
+const UPSTASH_REDIS_REST_URL = String(process.env.UPSTASH_REDIS_REST_URL || "").trim()
+const UPSTASH_REDIS_REST_TOKEN = String(process.env.UPSTASH_REDIS_REST_TOKEN || "").trim()
+const HAS_UPSTASH = !!(UPSTASH_REDIS_REST_URL && UPSTASH_REDIS_REST_TOKEN)
+const SESSION_KEY_PREFIX = "multidrive:sess:"
 
 function parseCookies(header) {
   const out = {}
@@ -77,21 +90,114 @@ function makeSessionId() {
   return crypto.randomBytes(24).toString("base64url")
 }
 
-function getOrCreateSession(req, res) {
+function createEmptySession(sid) {
+  return {
+    id: sid,
+    createdAt: Date.now(),
+    lastSeenAt: Date.now(),
+    accounts: [],
+    oauthStates: {}
+  }
+}
+
+function sanitizeAccountForStore(account) {
+  if (!account || typeof account !== "object") return null
+  const base = {
+    provider: normalizeProvider(account.provider),
+    email: normalizeEmail(account.email)
+  }
+  if (!base.provider || !base.email) return null
+  if (base.provider === "mega") {
+    return {
+      ...base,
+      megaSessionToken: typeof account.megaSessionToken === "string" ? account.megaSessionToken : ""
+    }
+  }
+  return {
+    ...base,
+    token: typeof account.token === "string" ? account.token : ""
+  }
+}
+
+function sanitizeSessionForStore(session) {
+  const source = session || {}
+  const oauthStates = source.oauthStates && typeof source.oauthStates === "object" ? source.oauthStates : {}
+  const nextOauthStates = {}
+  for (const key of Object.keys(oauthStates)) {
+    const item = oauthStates[key]
+    if (!item || typeof item !== "object") continue
+    const clientId = String(item.clientId || "").trim()
+    const clientSecret = String(item.clientSecret || "").trim()
+    const redirectUri = String(item.redirectUri || "").trim()
+    const createdAt = Number(item.createdAt || 0)
+    if (!clientId || !clientSecret || !redirectUri || !createdAt) continue
+    nextOauthStates[key] = { clientId, clientSecret, redirectUri, createdAt }
+  }
+
+  const safeAccounts = (Array.isArray(source.accounts) ? source.accounts : [])
+    .map(sanitizeAccountForStore)
+    .filter(Boolean)
+
+  return {
+    id: String(source.id || ""),
+    createdAt: Number(source.createdAt || Date.now()),
+    lastSeenAt: Number(source.lastSeenAt || Date.now()),
+    accounts: safeAccounts,
+    oauthStates: nextOauthStates
+  }
+}
+
+async function redisSetJson(key, value, ttlSec) {
+  const url = `${UPSTASH_REDIS_REST_URL}/set/${encodeURIComponent(key)}`
+  await axios.post(url, value, {
+    headers: {
+      Authorization: `Bearer ${UPSTASH_REDIS_REST_TOKEN}`,
+      "Content-Type": "application/json"
+    },
+    params: { EX: String(ttlSec) }
+  })
+}
+
+async function redisGetJson(key) {
+  const url = `${UPSTASH_REDIS_REST_URL}/get/${encodeURIComponent(key)}`
+  const response = await axios.get(url, {
+    headers: { Authorization: `Bearer ${UPSTASH_REDIS_REST_TOKEN}` }
+  })
+  const value = response?.data?.result
+  if (!value) return null
+  try {
+    return JSON.parse(value)
+  } catch (e) {
+    return null
+  }
+}
+
+async function loadSessionById(sid) {
+  if (!sid) return null
+  if (!HAS_UPSTASH) return sessions.get(sid) || null
+  const payload = await redisGetJson(SESSION_KEY_PREFIX + sid)
+  if (!payload || typeof payload !== "object") return null
+  return sanitizeSessionForStore(payload)
+}
+
+async function saveSession(session) {
+  if (!session || !session.id) return
+  const safe = sanitizeSessionForStore(session)
+  if (!HAS_UPSTASH) {
+    sessions.set(safe.id, safe)
+    return
+  }
+  await redisSetJson(SESSION_KEY_PREFIX + safe.id, safe, Math.floor(SESSION_TTL_MS / 1000))
+}
+
+async function getOrCreateSession(req, res) {
   const cookies = parseCookies(req.headers?.cookie)
   let sid = String(cookies[SESSION_COOKIE_NAME] || "").trim()
-  let session = sid ? sessions.get(sid) : null
+  let session = sid ? await loadSessionById(sid) : null
 
   if (!session) {
     sid = makeSessionId()
-    session = {
-      id: sid,
-      createdAt: Date.now(),
-      lastSeenAt: Date.now(),
-      accounts: [],
-      oauthStates: new Map()
-    }
-    sessions.set(sid, session)
+    session = createEmptySession(sid)
     const cookieParts = [
       `${SESSION_COOKIE_NAME}=${encodeURIComponent(sid)}`,
       "Path=/",
@@ -103,15 +209,19 @@ function getOrCreateSession(req, res) {
       cookieParts.push("Secure")
     }
     res.setHeader("Set-Cookie", cookieParts.join("; "))
-  } else {
-    session.lastSeenAt = Date.now()
   }
+  session.lastSeenAt = Date.now()
 
   req.sessionId = sid
   req.userSession = session
+  req.saveUserSession = async () => {
+    req.userSession.lastSeenAt = Date.now()
+    await saveSession(req.userSession)
+  }
 }
 
 function cleanupSessions() {
+  if (HAS_UPSTASH) return
   const now = Date.now()
   for (const [sid, session] of sessions.entries()) {
     if (!session || now - Number(session.lastSeenAt || 0) > SESSION_TTL_MS) {
@@ -283,12 +393,15 @@ function makeOAuthStateToken() {
 
 function cleanupOAuthStates(session) {
   if (!session || !session.oauthStates) return
+  const states = session.oauthStates && typeof session.oauthStates === "object" ? session.oauthStates : {}
   const now = Date.now()
-  for (const [key, value] of session.oauthStates.entries()) {
+  for (const key of Object.keys(states)) {
+    const value = states[key]
     if (!value || now - Number(value.createdAt || 0) > 15 * 60 * 1000) {
-      session.oauthStates.delete(key)
+      delete states[key]
     }
   }
+  session.oauthStates = states
 }
 
 function authHeaders(token) {
@@ -567,7 +680,7 @@ app.get("/auth/google", (req, res) => {
   return res.status(400).send("Use /auth/google/start with custom Google OAuth credentials.")
 })
 
-app.post("/auth/google/start", (req, res) => {
+app.post("/auth/google/start", async (req, res) => {
   try {
     cleanupOAuthStates(req.userSession)
     const customClientId = getBodyTrimmed(req, "clientId")
@@ -580,12 +693,13 @@ app.post("/auth/google/start", (req, res) => {
 
     const redirectUri = resolveRedirectUri(req)
     const state = makeOAuthStateToken()
-    req.userSession.oauthStates.set(state, {
+    req.userSession.oauthStates[state] = {
       clientId,
       clientSecret,
       redirectUri,
       createdAt: Date.now()
-    })
+    }
+    await req.saveUserSession()
 
     const url =
       `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(GOOGLE_OAUTH_SCOPE)}&access_type=offline&prompt=consent&state=${encodeURIComponent(state)}`
@@ -606,6 +720,7 @@ app.post("/auth/mega/login", async (req, res) => {
     const password = getBodyRaw(req, "password")
     const secondFactorCode = getBodyTrimmed(req, "secondFactorCode")
     await connectMegaAccountWithCredentials(req.userSession, { email, password, secondFactorCode })
+    await req.saveUserSession()
     res.redirect("/")
   } catch (err) {
     const msg = err && err.message ? err.message : "Unable to login to MEGA"
@@ -619,6 +734,7 @@ app.post("/auth/mega/login-json", async (req, res) => {
     const password = getBodyRaw(req, "password")
     const secondFactorCode = getBodyTrimmed(req, "secondFactorCode")
     const accountEmail = await connectMegaAccountWithCredentials(req.userSession, { email, password, secondFactorCode })
+    await req.saveUserSession()
     return res.json({ success: true, email: accountEmail })
   } catch (err) {
     const msg = err && err.message ? err.message : "Unable to login to MEGA"
@@ -628,7 +744,8 @@ app.post("/auth/mega/login-json", async (req, res) => {
 
 app.post("/auth/mega/token", (req, res) => {
   connectMegaAccount(req.userSession)
-    .then(() => {
+    .then(async () => {
+      await req.saveUserSession()
       res.redirect("/")
     })
     .catch((err) => {
@@ -640,6 +757,7 @@ app.post("/auth/mega/token", (req, res) => {
 app.post("/auth/mega/token-json", async (req, res) => {
   try {
     const email = await connectMegaAccount(req.userSession)
+    await req.saveUserSession()
     return res.json({ success: true, email })
   } catch (err) {
     const msg = err && err.message ? err.message : "Unable to connect MEGA token"
@@ -653,11 +771,14 @@ app.get("/auth/google/callback", async (req, res) => {
     const state = getQueryTrimmed(req, "state")
     cleanupOAuthStates(req.userSession)
 
-    if (!state || !req.userSession.oauthStates.has(state)) {
+    const oauthStates = req.userSession.oauthStates || {}
+    if (!state || !oauthStates[state]) {
       return res.status(400).send("OAuth session expired. Start Google sign-in again.")
     }
-    const stateData = req.userSession.oauthStates.get(state)
-    req.userSession.oauthStates.delete(state)
+    const stateData = oauthStates[state]
+    delete oauthStates[state]
+    req.userSession.oauthStates = oauthStates
+    await req.saveUserSession()
     const oauthClientId = stateData.clientId
     const oauthClientSecret = stateData.clientSecret
     const oauthRedirectUri = stateData.redirectUri || resolveRedirectUri(req)
@@ -680,6 +801,7 @@ app.get("/auth/google/callback", async (req, res) => {
       email: profileResponse.data.email,
       token: accessToken
     })
+    await req.saveUserSession()
 
     console.log("Google account connected")
     res.redirect("/")
@@ -770,6 +892,7 @@ app.post("/logout", (req, res) => {
     return res.status(404).json({ error: "Account not found" })
   }
 
+  req.saveUserSession().catch(() => { })
   res.json({ success: true })
 })
 
@@ -1458,7 +1581,7 @@ const PORT = Number(process.env.PORT || 3000)
 
 if (require.main === module) {
   app.listen(PORT, () => {
-    console.log(`Server running on https://multi-drives.vercel.app`)
+    console.log(`Server running on http://localhost:3000/`)
   })
 }
 
