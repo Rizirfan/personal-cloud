@@ -1473,6 +1473,21 @@ function removeBrowseRowById(fileId) {
     '<div class="state">No folders or files here.<img class="emptyStateImg" src="/images/nothing_here__.png" alt="Nothing here"></div>';
 }
 
+function goBackHomeFromBrowse() {
+  try {
+    const ref = document.referrer ? new URL(document.referrer) : null;
+    if (ref && ref.origin === window.location.origin) {
+      window.history.back();
+      return;
+    }
+  } catch (e) {}
+  window.location.href = "/";
+}
+
+document
+  .getElementById("browseBackBtn")
+  .addEventListener("click", goBackHomeFromBrowse);
+
 document
   .getElementById("uploadStatusCloseBtn")
   .addEventListener("click", function () {
