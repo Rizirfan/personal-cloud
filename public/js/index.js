@@ -4,7 +4,6 @@ const SEARCH_HISTORY_STORAGE_KEY = "multidrive-search-history";
 const SEARCH_HISTORY_MAX = 7;
 const GOOGLE_CLIENT_ID_STORAGE_KEY = "multidrive-google-client-id";
 const GOOGLE_CLIENT_SECRET_STORAGE_KEY = "multidrive-google-client-secret";
-const STORAGE_CACHE_KEY = "multidrive-storage-cache-v1";
 
 function getSearchHistory() {
   try {
@@ -30,22 +29,6 @@ function saveSearchHistoryTerm(term) {
     ),
   ].slice(0, SEARCH_HISTORY_MAX);
   localStorage.setItem(SEARCH_HISTORY_STORAGE_KEY, JSON.stringify(next));
-}
-
-function readCachedStorageAccounts() {
-  try {
-    const raw = localStorage.getItem(STORAGE_CACHE_KEY);
-    const parsed = JSON.parse(raw || "[]");
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (e) {
-    return [];
-  }
-}
-
-function writeCachedStorageAccounts(accounts) {
-  try {
-    localStorage.setItem(STORAGE_CACHE_KEY, JSON.stringify(accounts || []));
-  } catch (e) {}
 }
 
 function connectDrive() {
@@ -2251,21 +2234,6 @@ async function loadStorage() {
     seenAccounts.add(key);
     return true;
   });
-
-  if (uniqueData.length === 0) {
-    const cached = readCachedStorageAccounts();
-    const seenCached = new Set();
-    uniqueData = cached.filter((acc) => {
-      const email = acc?.user?.emailAddress;
-      if (!email) return false;
-      const key = makeAccountKey(email, acc.provider);
-      if (seenCached.has(key)) return false;
-      seenCached.add(key);
-      return true;
-    });
-  } else {
-    writeCachedStorageAccounts(uniqueData);
-  }
 
   connectedAccountCount = uniqueData.length;
   homeAccounts = uniqueData;
