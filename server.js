@@ -846,15 +846,7 @@ app.post("/delete-item", async (req, res) => {
     }
 
     if (account.provider === "mega") {
-      const storage = await ensureMegaStorageForAccount(account)
-      await storage.reload(true)
-      const node = getMegaNodeById(storage, fileId)
-      if (!node) {
-        return res.status(404).json({ error: "File not found" })
-      }
-      await node.delete(true)
-      await storage.reload(true)
-      return res.json({ success: true })
+      return res.status(403).json({ error: "Delete feature is only available in Google Drive account for now. i am working on it, stay tuned!" })
     }
 
     await axios.delete(`${DRIVE_FILES_URL}/${encodeURIComponent(fileId)}`, {
@@ -1380,7 +1372,13 @@ app.use((err, req, res, next) => {
   next()
 })
 
-app.listen(3000, () => {
-  console.log("Server running on http://localhost:3000")
-})
+const PORT = Number(process.env.PORT || 3000)
+
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`)
+  })
+}
+
+module.exports = app
 
