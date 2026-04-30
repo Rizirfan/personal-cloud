@@ -26,10 +26,11 @@ app.use((req, res, next) => {
 })
 app.use(express.static(path.join(__dirname, "public")))
 app.use("/images", express.static(path.join(__dirname, "images")))
-
+//this is credenstial value you can set via .env file or enviroment varialable
 const CLIENT_ID = process.env.CLIENT_ID
 const CLIENT_SECRET = process.env.CLIENT_SECRET
-const REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || "http://localhost:3000/auth/google/callback"
+//this is redirect uri change this if you are self deploying
+const REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || "https://multi-drives.vercel.app/auth/google/callback"
 const MEGA_SESSION_TOKEN = process.env.MEGA_SESSION_TOKEN || ""
 const MEGA_ACCOUNT_EMAIL = process.env.MEGA_ACCOUNT_EMAIL || ""
 const GOOGLE_OAUTH_SCOPE = ["openid", "email", "profile", "https://www.googleapis.com/auth/drive"].join(" ")
@@ -1012,7 +1013,7 @@ app.post("/create-folder", async (req, res) => {
   }
 })
 
-// Streaming upload route - handles large files without RAM buffering
+
 app.post("/upload-item-stream", async (req, res) => {
   const bb = busboy({
     headers: req.headers,
@@ -1376,7 +1377,7 @@ const PORT = Number(process.env.PORT || 3000)
 
 if (require.main === module) {
   app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`)
+    console.log(`Server running on https://multi-drives.vercel.app`)
   })
 }
 

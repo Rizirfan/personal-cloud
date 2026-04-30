@@ -1588,6 +1588,7 @@ document
   .getElementById("fileContextDeleteBtn")
   .addEventListener("click", deleteBrowseItemFromContext);
 document
+
   .getElementById("newFolderBtn")
   .addEventListener("click", createFolderFromTopBar);
 document
@@ -1673,6 +1674,7 @@ document
   });
 const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
 applyTheme(savedTheme === "dark" ? "dark" : "light");
+
 
 if (!browseEmail) {
   document.getElementById("browseEmail").textContent = "No account selected";

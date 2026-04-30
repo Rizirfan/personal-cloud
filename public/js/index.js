@@ -1025,7 +1025,7 @@ function uploadFileWithProgress(form, onProgress, uploadId, fileSize, meta) {
       let payload = {};
       try {
         payload = raw ? JSON.parse(raw) : {};
-      } catch (e) {}
+      } catch (e) { }
       if (xhr.status >= 200 && xhr.status < 300) {
         resolve(payload);
       } else {
@@ -1188,7 +1188,7 @@ async function uploadDroppedFilesToAccount(accountKey) {
               " • ETA " +
               (smoothedSpeed > 0 ? formatDuration(etaSec) : "—"),
           });
-        } catch (e) {}
+        } catch (e) { }
       }, 300);
       homeActivePollTimer = pollTimer;
 
@@ -1385,14 +1385,14 @@ async function loadBrowseFolder() {
       normalizeProvider(browseProvider) === "mega"
         ? '<div class="browseBreadcrumb" id="browseBreadcrumb"></div>'
         : '<div class="browseNav">' +
-          '<button type="button" class="browseNavBtn' +
-          (inMyDriveBranch ? " active" : "") +
-          '" data-nav="my">My Drive</button>' +
-          '<button type="button" class="browseNavBtn' +
-          (inSharedBranch ? " active" : "") +
-          '" data-nav="shared">Shared drives</button>' +
-          "</div>" +
-          '<div class="browseBreadcrumb" id="browseBreadcrumb"></div>';
+        '<button type="button" class="browseNavBtn' +
+        (inMyDriveBranch ? " active" : "") +
+        '" data-nav="my">My Drive</button>' +
+        '<button type="button" class="browseNavBtn' +
+        (inSharedBranch ? " active" : "") +
+        '" data-nav="shared">Shared drives</button>' +
+        "</div>" +
+        '<div class="browseBreadcrumb" id="browseBreadcrumb"></div>';
 
     if (items.length === 0) {
       const emptyHint =
@@ -1505,7 +1505,7 @@ async function loadBrowseFolder() {
         let fname = btn.getAttribute("data-folder-name") || "";
         try {
           fname = decodeURIComponent(fname);
-        } catch (e) {}
+        } catch (e) { }
         openBrowseFolder(fid, fname);
       });
     });
@@ -1528,15 +1528,15 @@ async function loadBrowseFolder() {
         let provider = browseProvider;
         try {
           name = decodeURIComponent(rawName) || "(unnamed)";
-        } catch (e) {}
+        } catch (e) { }
         try {
           email = decodeURIComponent(rawEmail) || browseEmail;
-        } catch (e) {}
+        } catch (e) { }
         try {
           provider = normalizeProvider(
             decodeURIComponent(rawProvider) || browseProvider,
           );
-        } catch (e) {}
+        } catch (e) { }
 
         openFileContextMenu(ev.clientX, ev.clientY, {
           id: fileId,
@@ -1825,10 +1825,10 @@ function renderGlobalSearchResults(results) {
       const isFolder = mime === FOLDER_MIME;
       const modified = item.modifiedTime
         ? new Date(item.modifiedTime).toLocaleDateString(undefined, {
-            year: "numeric",
-            month: "2-digit",
-            day: "2-digit",
-          })
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        })
         : "—";
       const size = mime === FOLDER_MIME ? "—" : formatFileSize(item.size);
       const link = item.webViewLink ? String(item.webViewLink) : "";
@@ -1839,28 +1839,28 @@ function renderGlobalSearchResults(results) {
         item && item.accountProvider ? String(item.accountProvider) : "google";
       const openUrl = isFolder
         ? "/browse.html?email=" +
+        encodeURIComponent(accountEmail) +
+        "&provider=" +
+        encodeURIComponent(accountProvider) +
+        "&folderId=" +
+        encodeURIComponent(fileId) +
+        "&folderName=" +
+        encodeURIComponent(item.name || "(folder)")
+        : link ||
+        (fileId && accountEmail
+          ? "/open-file?email=" +
           encodeURIComponent(accountEmail) +
           "&provider=" +
           encodeURIComponent(accountProvider) +
-          "&folderId=" +
-          encodeURIComponent(fileId) +
-          "&folderName=" +
-          encodeURIComponent(item.name || "(folder)")
-        : link ||
-          (fileId && accountEmail
-            ? "/open-file?email=" +
-              encodeURIComponent(accountEmail) +
-              "&provider=" +
-              encodeURIComponent(accountProvider) +
-              "&fileId=" +
-              encodeURIComponent(fileId)
-            : "");
+          "&fileId=" +
+          encodeURIComponent(fileId)
+          : "");
       const nameText = openUrl
         ? '<a class="searchLink searchNameText" href="' +
-          escapeHtml(openUrl) +
-          '" target="_blank" rel="noopener noreferrer">' +
-          name +
-          "</a>"
+        escapeHtml(openUrl) +
+        '" target="_blank" rel="noopener noreferrer">' +
+        name +
+        "</a>"
         : '<span class="searchNameText">' + name + "</span>";
       const nameCell =
         '<div class="searchNameWrap">' +
@@ -2386,10 +2386,10 @@ ${usedFormatted} / ${limitFormatted} (${percent}% Used)
   if (connectedAccountCount === 0) {
     renderGlobalSearchState(
       '<div class="searchStateConnect">' +
-        "<div>No connected cloud accounts yet.</div>" +
-        '<img class="searchStateConnectImg" src="/images/dinosaur_waving (1).png" alt="dinosaur waving">' +
-        '<p class="searchStateConnectText">hi, please connect</p>' +
-        "</div>",
+      "<div>No connected cloud accounts yet.</div>" +
+      '<img class="searchStateConnectImg" src="/images/dinosaur_waving (1).png" alt="dinosaur waving">' +
+      '<p class="searchStateConnectText">hi, please connect</p>' +
+      "</div>",
     );
   } else {
     renderGlobalSearchState("");
@@ -2397,7 +2397,7 @@ ${usedFormatted} / ${limitFormatted} (${percent}% Used)
 
   try {
     setGreetingFromSavedName();
-  } catch (e) {}
+  } catch (e) { }
 }
 
 initFirstVisitNamePrompt();
