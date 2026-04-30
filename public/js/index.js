@@ -2645,6 +2645,11 @@ document
   .getElementById("googleOauthForm")
   .addEventListener("submit", submitGoogleOauthForm);
 document
+  .getElementById("googleOauthGuideBtn")
+  .addEventListener("click", function () {
+    window.open("/guide.html", "_blank", "noopener,noreferrer");
+  });
+document
   .getElementById("megaLoginCloseBtn")
   .addEventListener("click", closeMegaLoginModal);
 document
@@ -2678,6 +2683,9 @@ document
     localStorage.setItem(THEME_STORAGE_KEY, next);
     applyTheme(next);
   });
+document.getElementById("demoVideoBtn").addEventListener("click", function () {
+  window.open("https://youtu.be/6LNFNvux888", "_blank", "noopener,noreferrer");
+});
 const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
 applyTheme(savedTheme === "dark" ? "dark" : "light");
 updateSearchClearButton();

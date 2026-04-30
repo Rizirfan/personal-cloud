@@ -567,11 +567,47 @@ body.darkMode .accountSectionIcon img {
   font-family: var(--font-display);
 }
 
+.greetingRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.demoVideoBtn {
+  border: 2px dashed var(--border);
+  border-radius: 999px;
+  min-height: 38px;
+  padding: 8px 14px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 900;
+  font-family: var(--font-display);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.demoVideoBtn:hover {
+  background: var(--border);
+  color: #fff;
+}
+
 .subtitle {
   margin: 0 0 20px;
   color: var(--muted);
   font-size: 14px;
   font-weight: 700;
+}
+
+@media (max-width: 640px) {
+  .greetingRow {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 
 .homeSearch {
@@ -2447,6 +2483,33 @@ body.darkMode .providerOptionSettingsMenu {
 
 .googleOauthStatus.error {
   color: #b91c1c;
+}
+
+.googleOauthGuideRow {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 2px;
+}
+
+.googleOauthGuideBtn {
+  border: 2px dashed var(--border);
+  border-radius: 10px;
+  min-height: 36px;
+  padding: 8px 12px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 900;
+  font-family: var(--font-display);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.googleOauthGuideBtn:hover {
+  background: var(--border);
+  color: #fff;
 }
 
 .namePromptModal {
