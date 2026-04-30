@@ -172,6 +172,13 @@ async function redisGetJson(key) {
   }
 }
 
+async function redisDel(key) {
+  const url = `${UPSTASH_REDIS_REST_URL}/del/${encodeURIComponent(key)}`
+  await axios.post(url, null, {
+    headers: { Authorization: `Bearer ${UPSTASH_REDIS_REST_TOKEN}` }
+  })
+}
+
 async function loadSessionById(sid) {
   if (!sid) return null
   if (!HAS_UPSTASH) return sessions.get(sid) || null
@@ -253,15 +260,20 @@ function setUploadProgress(id, patch) {
   next.avgBps = Number.isFinite(avgBps) ? avgBps : 0
   next.etaSec = avgBps > 0 && total > uploaded ? Math.ceil((total - uploaded) / avgBps) : 0
 
-  uploadProgress.set(id, {
-    ...next
-  })
+  const finalState = { ...next }
+  uploadProgress.set(id, finalState)
+  if (HAS_UPSTASH) {
+    redisSetJson(`multidrive:progress:${id}`, finalState, 5 * 60).catch(() => { })
+  }
 }
 
 function cleanupUploadProgress(id, delayMs = 5 * 60 * 1000) {
   if (!id) return
   setTimeout(() => {
     uploadProgress.delete(id)
+    if (HAS_UPSTASH) {
+      redisDel(`multidrive:progress:${id}`).catch(() => { })
+    }
   }, delayMs)
 }
 
@@ -1623,12 +1635,17 @@ app.post("/upload-item", upload.single("file"), async (req, res) => {
   }
 })
 
-app.get("/upload-progress", (req, res) => {
+app.get("/upload-progress", async (req, res) => {
   const uploadId = getQueryTrimmed(req, "uploadId")
   if (!uploadId) {
     return res.status(400).json({ error: "uploadId is required" })
   }
-  const state = uploadProgress.get(uploadId)
+  let state = null
+  if (HAS_UPSTASH) {
+    state = await redisGetJson(`multidrive:progress:${uploadId}`).catch(() => null)
+  } else {
+    state = uploadProgress.get(uploadId)
+  }
   if (!state || String(state.sessionId || "") !== String(req.sessionId || "")) {
     return res.json({ status: "unknown" })
   }
