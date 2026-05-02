@@ -2684,7 +2684,7 @@ document
     applyTheme(next);
   });
 document.getElementById("demoVideoBtn").addEventListener("click", function () {
-  window.open("https://youtu.be/6LNFNvux888", "_blank", "noopener,noreferrer");
+  window.open("https://www.youtube.com/watch?v=NxMBscRX9ag", "_blank", "noopener,noreferrer");
 });
 const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
 applyTheme(savedTheme === "dark" ? "dark" : "light");
