@@ -1,14 +1,13 @@
 # Multi Drive
 
 Manage multiple Google Drive and Mega accounts from a single interface with options to edit, delete, upload ,create files, and view remaining storage. and search folder from multiple account at one time.
-### I build it before flavourtown that version is very basic , Thats why i decided to Build it from scratch again before flavortown ends
+
 <hr>
 <br>
 
 - <b>Setup Guide</b> - https://multi-drives.vercel.app/guide.html
 - <b>Demo Video</b> - https://www.youtube.com/watch?v=NxMBscRX9ag
 - <b>Demo Website</b> - https://multi-drives.vercel.app/ <br>(if you face any error try please using localhost for testing)
-- <b>Flavortown Link</b> - https://flavortown.hackclub.com/projects/19197
 <br>
  
 <hr>
