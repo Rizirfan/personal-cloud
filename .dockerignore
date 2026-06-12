@@ -1,0 +1,11 @@
+node_modules/
+client/node_modules/
+client/dist/
+.git/
+.env
+.env.local
+*.log
+.gemini-backup-server.js
+images/
+firebase-debug.log
+firestore-debug.log

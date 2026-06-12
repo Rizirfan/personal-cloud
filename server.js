@@ -2,10 +2,17 @@ const express = require("express")
 const axios = require("axios")
 const cors = require("cors")
 const path = require("path")
+const fs = require("fs")
 const multer = require("multer")
 const busboy = require("busboy")
-const mega = require("megajs")
 const crypto = require("crypto")
+const {
+  isFirebaseAdminConfigured,
+  verifyFirebaseToken,
+  loadFirestoreSession,
+  saveFirestoreSession
+} = require("./firebaseAdmin")
+const { encryptText, decryptText } = require("./server/services/encryptionService")
 require("dotenv").config()
 
 const app = express()
@@ -14,7 +21,10 @@ const upload = multer({
   limits: { fileSize: 100 * 1024 * 1024 }
 })
 
-app.use(cors())
+app.use(cors({
+  origin: true,
+  credentials: true
+}))
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 app.use(async (req, res, next) => {
@@ -38,18 +48,17 @@ app.use((req, res, next) => {
   }
   next()
 })
-app.use(express.static(path.join(__dirname, "public")))
-app.use("/images", express.static(path.join(__dirname, "images")))
-//this is credenstial value you can set via .env file or enviroment varialable
+const clientDist = path.join(__dirname, "client", "dist")
+
+if (fs.existsSync(path.join(__dirname, "images"))) {
+  app.use("/images", express.static(path.join(__dirname, "images")))
+}
+
 const CLIENT_ID = process.env.CLIENT_ID
 const CLIENT_SECRET = process.env.CLIENT_SECRET
-//this is redirect uri change this if you are self deploying
 const REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || "https://multi-drives.vercel.app/auth/google/callback"
-const MEGA_SESSION_TOKEN = process.env.MEGA_SESSION_TOKEN || ""
-const MEGA_ACCOUNT_EMAIL = process.env.MEGA_ACCOUNT_EMAIL || ""
 const GOOGLE_OAUTH_SCOPE = ["openid", "email", "profile", "https://www.googleapis.com/auth/drive"].join(" ")
 
-//all the Google Drive API endpoints we will be using
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 const GOOGLE_PROFILE_URL = "https://www.googleapis.com/oauth2/v2/userinfo"
 const DRIVE_FILES_URL = "https://www.googleapis.com/drive/v3/files"
@@ -59,8 +68,6 @@ const DRIVE_UPLOAD_URL = "https://www.googleapis.com/upload/drive/v3/files"
 const FOLDER_MIME = "application/vnd.google-apps.folder"
 const DRIVE_FILES_FIELDS = "nextPageToken, files(id, name, mimeType, size, modifiedTime, webViewLink, iconLink, thumbnailLink, parents, driveId)"
 
-
-let megaStorage = null
 const uploadProgress = new Map()
 const sessions = new Map()
 const SESSION_COOKIE_NAME = "md_sid"
@@ -100,22 +107,24 @@ function createEmptySession(sid) {
   }
 }
 
+function normalizeEmail(value) {
+  return String(value || "").trim().toLowerCase()
+}
+
 function sanitizeAccountForStore(account) {
   if (!account || typeof account !== "object") return null
   const base = {
-    provider: normalizeProvider(account.provider),
+    provider: "google",
     email: normalizeEmail(account.email)
   }
-  if (!base.provider || !base.email) return null
-  if (base.provider === "mega") {
-    return {
-      ...base,
-      megaSessionToken: typeof account.megaSessionToken === "string" ? account.megaSessionToken : ""
-    }
-  }
+  if (!base.email) return null
   return {
     ...base,
-    token: typeof account.token === "string" ? account.token : ""
+    token: typeof account.token === "string" ? account.token : "",
+    refreshToken: typeof account.refreshToken === "string" ? account.refreshToken : "",
+    clientId: typeof account.clientId === "string" ? account.clientId : "",
+    clientSecret: typeof account.clientSecret === "string" ? account.clientSecret : "",
+    expiresAt: typeof account.expiresAt === "number" ? account.expiresAt : 0
   }
 }
 
@@ -135,7 +144,15 @@ function sanitizeSessionForStore(session) {
   }
 
   const safeAccounts = (Array.isArray(source.accounts) ? source.accounts : [])
-    .map(sanitizeAccountForStore)
+    .map(acc => {
+      const safe = sanitizeAccountForStore(acc)
+      if (!safe) return null
+      return {
+        ...safe,
+        clientSecret: encryptText(safe.clientSecret),
+        refreshToken: encryptText(safe.refreshToken)
+      }
+    })
     .filter(Boolean)
 
   return {
@@ -172,19 +189,26 @@ async function redisGetJson(key) {
   }
 }
 
-async function redisDel(key) {
-  const url = `${UPSTASH_REDIS_REST_URL}/del/${encodeURIComponent(key)}`
-  await axios.post(url, null, {
-    headers: { Authorization: `Bearer ${UPSTASH_REDIS_REST_TOKEN}` }
-  })
-}
-
 async function loadSessionById(sid) {
   if (!sid) return null
-  if (!HAS_UPSTASH) return sessions.get(sid) || null
-  const payload = await redisGetJson(SESSION_KEY_PREFIX + sid)
+  let payload = null;
+  if (!HAS_UPSTASH) {
+    payload = sessions.get(sid) || null;
+  } else {
+    payload = await redisGetJson(SESSION_KEY_PREFIX + sid);
+  }
   if (!payload || typeof payload !== "object") return null
-  return sanitizeSessionForStore(payload)
+  
+  const session = sanitizeSessionForStore(payload)
+  
+  // Decrypt the secrets for in-memory use
+  session.accounts = session.accounts.map(acc => ({
+    ...acc,
+    clientSecret: decryptText(acc.clientSecret),
+    refreshToken: decryptText(acc.refreshToken)
+  }))
+  
+  return session
 }
 
 async function saveSession(session) {
@@ -239,389 +263,105 @@ function cleanupSessions() {
 
 setInterval(cleanupSessions, SESSION_CLEANUP_MS).unref()
 
-function setUploadProgress(id, patch) {
-  if (!id) return
-  const now = Date.now()
-  const prev = uploadProgress.get(id) || {}
-  const next = {
-    ...prev,
-    ...patch,
-    updatedAt: now
-  }
-
-  if (!next.startedAt) {
-    next.startedAt = now
-  }
-
-  const uploaded = Number(next.bytesUploaded || 0)
-  const total = Number(next.bytesTotal || 0)
-  const elapsedSec = Math.max(0.001, (now - Number(next.startedAt || now)) / 1000)
-  const avgBps = uploaded > 0 ? (uploaded / elapsedSec) : 0
-  next.avgBps = Number.isFinite(avgBps) ? avgBps : 0
-  next.etaSec = avgBps > 0 && total > uploaded ? Math.ceil((total - uploaded) / avgBps) : 0
-
-  const finalState = { ...next }
-  uploadProgress.set(id, finalState)
-  if (HAS_UPSTASH) {
-    redisSetJson(`multidrive:progress:${id}`, finalState, 5 * 60).catch(() => { })
-  }
+function getAccountByEmail(session, email) {
+  if (!session) return null
+  const target = normalizeEmail(email)
+  const accounts = Array.isArray(session.accounts) ? session.accounts : []
+  return accounts.find((account) => normalizeEmail(account.email) === target)
 }
-
-function cleanupUploadProgress(id, delayMs = 5 * 60 * 1000) {
-  if (!id) return
-  setTimeout(() => {
-    uploadProgress.delete(id)
-    if (HAS_UPSTASH) {
-      redisDel(`multidrive:progress:${id}`).catch(() => { })
-    }
-  }, delayMs)
-}
-
-
-function normalizeProvider(value) {
-  return String(value || "").trim().toLowerCase()
-}
-
-function normalizeEmail(value) {
-  return String(value || "").trim().toLowerCase()
-}
-
-function makeAccountKey(provider, email) {
-  return normalizeProvider(provider) + "::" + normalizeEmail(email)
-}
-// Upsert account by provider and email
 
 function upsertAccount(session, account) {
   if (!session) return
-  const key = makeAccountKey(account.provider, account.email)
   const current = Array.isArray(session.accounts) ? session.accounts : []
-  session.accounts = current.filter((item) => makeAccountKey(item.provider, item.email) !== key)
-  session.accounts.push(account)
-}
-
-function exportSessionAccountsForClient(session) {
-  const list = Array.isArray(session?.accounts) ? session.accounts : []
-  return list.map((account) => {
-    const provider = normalizeProvider(account.provider)
-    const email = normalizeEmail(account.email)
-    if (provider === "mega") {
-      return {
-        provider,
-        email,
-        megaSessionToken: typeof account.megaSessionToken === "string" ? account.megaSessionToken : ""
-      }
-    }
-    return {
-      provider,
-      email,
-      token: typeof account.token === "string" ? account.token : ""
-    }
-  }).filter((item) => item.email && item.provider)
-}
-
-function parseMegaSessionToken(raw) {
-  if (!raw || typeof raw !== "string") return null
-
-  const text = raw.trim()
-  if (!text) return null
-
-  const attempts = [text]
-  try {
-    attempts.push(Buffer.from(text, "base64").toString("utf8"))
-  } catch (e) { }
-
-  for (const candidate of attempts) {
-    try {
-      const parsed = JSON.parse(candidate)
-      if (parsed && typeof parsed === "object" && parsed.sid && parsed.key) {
-        return parsed
-      }
-    } catch (e) { }
+  const existing = current.find((item) => normalizeEmail(item.email) === normalizeEmail(account.email))
+  
+  const updatedAccount = {
+    ...account,
+    refreshToken: account.refreshToken || existing?.refreshToken || "",
+    clientId: account.clientId || existing?.clientId || "",
+    clientSecret: account.clientSecret || existing?.clientSecret || "",
+    expiresAt: account.expiresAt !== undefined ? account.expiresAt : (existing?.expiresAt || 0)
   }
-
-  return null
-}
-
-function buildMegaEmail(storage) {
-  if (typeof MEGA_ACCOUNT_EMAIL === "string" && MEGA_ACCOUNT_EMAIL.trim()) {
-    return MEGA_ACCOUNT_EMAIL.trim()
-  }
-  if (storage && storage.options && typeof storage.options.email === "string" && storage.options.email.trim()) {
-    return storage.options.email.trim()
-  }
-  if (storage && typeof storage.user === "string" && storage.user.trim()) {
-    return "mega:" + storage.user.trim()
-  }
-  return "mega-account"
-}
-
-function getFirstNameFromEmail(email) {
-  const raw = normalizeEmail(email)
-  if (!raw || !raw.includes("@")) return ""
-
-  const local = raw.split("@")[0].replace(/[._+\-]+/g, " ").trim()
-  if (!local) return ""
-
-  const token = local.split(/\s+/).find(Boolean) || ""
-  if (!token) return ""
-
-  return token.charAt(0).toUpperCase() + token.slice(1)
-}
-
-function getFirstNameFromDisplayName(name) {
-  const raw = String(name || "").trim()
-  if (!raw) return ""
-
-  const first = raw.split(/\s+/).find(Boolean) || ""
-  const normalized = first.toLowerCase()
-  if (normalized === "mega" || normalized === "google" || normalized === "drive") {
-    return ""
-  }
-  return first
-}
-
-function normalizeMegaNode(node, parentId) {
-  const isFolder = !!node.directory
-  const timestampMs = Number.isFinite(node.timestamp) ? Number(node.timestamp) * 1000 : null
-  return {
-    id: String(node.nodeId || ""),
-    name: node.name || "(unnamed)",
-    mimeType: isFolder ? FOLDER_MIME : "application/octet-stream",
-    size: isFolder ? null : Number(node.size || 0),
-    modifiedTime: timestampMs ? new Date(timestampMs).toISOString() : null,
-    webViewLink: null,
-    iconLink: null,
-    thumbnailLink: null,
-    parents: parentId ? [parentId] : [],
-    driveId: null
-  }
-}
-
-function getBodyTrimmed(req, key) {
-  const value = req.body?.[key]
-  return typeof value === "string" ? value.trim() : ""
-}
-
-function getBodyRaw(req, key) {
-  const value = req.body?.[key]
-  return typeof value === "string" ? value : ""
-}
-
-function getQueryTrimmed(req, key) {
-  const value = req.query?.[key]
-  return typeof value === "string" ? value.trim() : ""
-}
-
-function resolveRedirectUri(req) {
-  if (REDIRECT_URI) return REDIRECT_URI
-  const proto = req.headers["x-forwarded-proto"] || req.protocol || "http"
-  const host = req.headers["x-forwarded-host"] || req.get("host")
-  return `${proto}://${host}/auth/google/callback`
-}
-
-function makeOAuthStateToken() {
-  return "g_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 10)
-}
-
-function cleanupOAuthStates(session) {
-  if (!session || !session.oauthStates) return
-  const states = session.oauthStates && typeof session.oauthStates === "object" ? session.oauthStates : {}
-  const now = Date.now()
-  for (const key of Object.keys(states)) {
-    const value = states[key]
-    if (!value || now - Number(value.createdAt || 0) > 15 * 60 * 1000) {
-      delete states[key]
-    }
-  }
-  session.oauthStates = states
+  
+  session.accounts = current.filter((item) => normalizeEmail(item.email) !== normalizeEmail(account.email))
+  session.accounts.push(updatedAccount)
 }
 
 function authHeaders(token) {
   return { Authorization: `Bearer ${token}` }
 }
 
-function logError(err) {
-  console.log(err.response?.data || err.message)
-}
+async function getFreshAccessToken(account, req) {
+  if (!account) return null
 
-function sendErrorJson(res, err, fallbackMessage) {
-  logError(err)
-  const status = err.response?.status || 500
-  const message = err.response?.data?.error?.message || fallbackMessage
-  res.status(status).json({ error: message })
-}
-
-function getAccountByEmail(session, email, provider) {
-  if (!session) return null
-  const target = normalizeEmail(email)
-  const targetProvider = normalizeProvider(provider)
-  const accounts = Array.isArray(session.accounts) ? session.accounts : []
-
-  return accounts.find((account) => {
-    const sameEmail = normalizeEmail(account.email) === target
-    if (!sameEmail) return false
-    if (!targetProvider) return true
-    return normalizeProvider(account.provider) === targetProvider
-  })
-}
-
-function getMegaNodeById(storage, nodeId) {
-  if (!storage || !storage.files || !nodeId) return null
-  return storage.files[nodeId] || null
-}
-
-async function ensureMegaStorageForAccount(account) {
-  if (!account || normalizeProvider(account.provider) !== "mega") {
-    throw new Error("Invalid MEGA account")
-  }
-
-  const tryReload = async (storage) => {
-    if (!storage) return null
-    await storage.reload(true)
-    storage.status = "ready"
-    return storage
-  }
-
-  try {
-    const live = await tryReload(account.storage)
-    if (live) {
-      account.storage = live
-      return live
+  // If there's no expiration or it has expired (or is close to expiring in 5 minutes)
+  const isExpired = !account.expiresAt || Date.now() >= (account.expiresAt - 5 * 60 * 1000)
+  
+  if (isExpired && account.refreshToken && account.clientId && account.clientSecret) {
+    try {
+      console.log(`Refreshing access token for ${account.email}...`)
+      const response = await axios.post(GOOGLE_TOKEN_URL, new URLSearchParams({
+        client_id: account.clientId,
+        client_secret: account.clientSecret,
+        refresh_token: account.refreshToken,
+        grant_type: "refresh_token"
+      }).toString(), {
+        headers: { "Content-Type": "application/x-www-form-urlencoded" }
+      })
+      
+      const newAccessToken = response.data.access_token
+      const expiresIn = response.data.expires_in || 3600
+      
+      account.token = newAccessToken
+      account.expiresAt = Date.now() + expiresIn * 1000
+      
+      // Save session explicitly to ensure the new token is written
+      if (req && typeof req.saveUserSession === "function") {
+        await req.saveUserSession()
+      }
+    } catch (err) {
+      console.error(`Error refreshing token for ${account.email}:`, err.response?.data || err.message)
     }
-  } catch (e) {
-    account.storage = null
   }
+  
+  return account.token
+}
 
-  const rawSession = account.megaSessionToken
-  const parsed = typeof rawSession === "string" ? parseMegaSessionToken(rawSession) : null
-  if (parsed) {
-    const restored = mega.Storage.fromJSON(parsed)
-    await restored.reload(true)
-    restored.status = "ready"
-    account.storage = restored
-    return restored
+async function fetchGoogleAccountInfo(account) {
+  const [driveResponse, profileResponse] = await Promise.all([
+    axios.get(DRIVE_ABOUT_URL, { headers: authHeaders(account.token) }),
+    axios.get(GOOGLE_PROFILE_URL, { headers: authHeaders(account.token) })
+  ])
+
+  const driveUser = driveResponse.data.user || {}
+  const profile = profileResponse.data || {}
+  const email = driveUser.emailAddress || profile.email
+
+  return {
+    provider: "google",
+    ...driveResponse.data,
+    user: {
+      ...driveUser,
+      emailAddress: email,
+      displayName: driveUser.displayName || profile.name || "",
+      photoLink: driveUser.photoLink || profile.picture
+    }
   }
-
-  if (MEGA_SESSION_TOKEN) {
-    const fallback = await getMegaStorage()
-    account.storage = fallback
-    return fallback
-  }
-
-  throw new Error("MEGA session expired. Reconnect the account.")
 }
 
 function escapeDriveQueryId(id) {
   return String(id).replace(/\\/g, "\\\\").replace(/'/g, "\\'")
 }
 
-function escapeDriveContains(value) {
-  return String(value).replace(/\\/g, "\\\\").replace(/'/g, "\\'")
-}
-
-async function getMegaStorage() {
-  if (megaStorage) {
-    try {
-      if (megaStorage.status === "ready") return megaStorage
-      await megaStorage.reload(true)
-      megaStorage.status = "ready"
-      return megaStorage
-    } catch (e) {
-      megaStorage = null
-    }
-  }
-
-  const parsed = parseMegaSessionToken(MEGA_SESSION_TOKEN)
-  if (!parsed) {
-    throw new Error("MEGA_SESSION_TOKEN is missing or invalid. Use JSON from storage.toJSON() or its base64.")
-  }
-
-  const storage = mega.Storage.fromJSON(parsed)
-  await storage.reload(true)
-  storage.status = "ready"
-  megaStorage = storage
-  return storage
-}
-
-async function connectMegaAccount(session) {
-  const storage = await getMegaStorage()
-  const email = buildMegaEmail(storage)
-  const snapshot = storage.toJSON ? storage.toJSON() : null
-  upsertAccount(session, {
-    provider: "mega",
-    email,
-    storage,
-    megaSessionToken: snapshot ? JSON.stringify(snapshot) : MEGA_SESSION_TOKEN
-  })
-  return email
-}
-
-async function connectMegaAccountWithCredentials(session, { email, password, secondFactorCode }) {
-  if (!email || !password) {
-    throw new Error("MEGA email and password are required")
-  }
-
-  const storage = new mega.Storage({
-    email: String(email).trim(),
-    password: String(password),
-    secondFactorCode: secondFactorCode ? String(secondFactorCode).trim() : undefined,
-    autoload: true,
-    autologin: true
-  })
-
-  await storage.ready
-  const accountEmail = normalizeEmail(email)
-  const snapshot = storage.toJSON ? storage.toJSON() : null
-  upsertAccount(session, {
-    provider: "mega",
-    email: accountEmail,
-    storage,
-    megaSessionToken: snapshot ? JSON.stringify(snapshot) : ""
-  })
-  return accountEmail
-}
-
-async function getParentDriveId(accessToken, parentId) {
-  if (parentId === "root") return null
-
-  try {
-    const response = await axios.get(`${DRIVE_FILES_URL}/${encodeURIComponent(parentId)}`, {
-      headers: authHeaders(accessToken),
-      params: { fields: "driveId", supportsAllDrives: true }
-    })
-
-    const id = response.data.driveId
-    return id ? String(id) : null
-  } catch (err) {
-    logError(err)
-    return null
-  }
-}
-
-function buildListParams(parentId, q, pageToken, driveId, rootMinimal) {
+function buildListParams(parentId, q, pageToken) {
   const params = {
     q,
     pageSize: 1000,
     fields: DRIVE_FILES_FIELDS,
-    supportsAllDrives: true
+    supportsAllDrives: true,
+    includeItemsFromAllDrives: true,
+    corpora: "user"
   }
-
-  if (rootMinimal) {
-    params.corpora = "user"
-    params.includeItemsFromAllDrives = false
-  } else {
-    params.includeItemsFromAllDrives = true
-
-    if (parentId === "root") {
-      params.corpora = "user"
-    } else if (driveId) {
-      params.corpora = "drive"
-      params.driveId = driveId
-    } else {
-      params.corpora = "user"
-    }
-  }
-
   params.orderBy = "folder,name_natural"
   if (pageToken) params.pageToken = pageToken
   return params
@@ -630,1045 +370,405 @@ function buildListParams(parentId, q, pageToken, driveId, rootMinimal) {
 async function listChildrenInFolder(accessToken, parentId) {
   const escaped = parentId === "root" ? "root" : escapeDriveQueryId(parentId)
   const q = `'${escaped}' in parents and trashed=false`
-  const driveId = parentId === "root" ? null : await getParentDriveId(accessToken, parentId)
 
-  async function fetchAllPages(rootMinimal) {
-    const all = []
-    let pageToken = null
-
-    do {
-      const params = buildListParams(parentId, q, pageToken, driveId, rootMinimal)
-      const response = await axios.get(DRIVE_FILES_URL, {
-        headers: authHeaders(accessToken),
-        params
-      })
-      all.push(...(response.data.files || []))
-      pageToken = response.data.nextPageToken || null
-    } while (pageToken)
-
-    return all
-  }
-
-  try {
-    const all = await fetchAllPages(false)
-    if (all.length > 0 || parentId !== "root") return all
-    return await fetchAllPages(true)
-  } catch (err) {
-    if (parentId !== "root") throw err
-    logError(err)
-    return await fetchAllPages(true)
-  }
-}
-
-async function listSharedDrives(accessToken) {
-  const drives = []
+  const all = []
   let pageToken = null
 
   do {
-    const params = {
-      pageSize: 100,
-      fields: "nextPageToken, drives(id, name)"
-    }
-    if (pageToken) params.pageToken = pageToken
-
-    const response = await axios.get(DRIVE_DRIVES_URL, {
+    const params = buildListParams(parentId, q, pageToken)
+    const response = await axios.get(DRIVE_FILES_URL, {
       headers: authHeaders(accessToken),
       params
     })
-
-
-    drives.push(...(response.data.drives || []))
+    all.push(...(response.data.files || []))
     pageToken = response.data.nextPageToken || null
   } while (pageToken)
 
-  return drives.map((drive) => ({
-    id: drive.id,
-    name: drive.name || "Shared drive",
-    mimeType: FOLDER_MIME,
-    size: null,
-    modifiedTime: null,
-    webViewLink: null,
-    parents: [],
-    driveId: drive.id,
-    isSharedDriveRoot: true
-  }))
+  return all
 }
-
-async function listMegaChildren(storage, parentId) {
-  await storage.reload(true)
-
-  const parentNode = parentId === "root" ? storage.root : getMegaNodeById(storage, parentId)
-  if (!parentNode || !parentNode.directory) {
-    const err = new Error("Destination folder not found")
-    err.statusCode = 404
-    throw err
-  }
-
-  const children = Array.isArray(parentNode.children) ? parentNode.children : []
-  return children.map((node) => normalizeMegaNode(node, parentNode.nodeId || "root"))
-}
-
-app.get("/auth/google", (req, res) => {
-  return res.status(400).send("Use /auth/google/start with custom Google OAuth credentials.")
-})
 
 app.post("/auth/google/start", async (req, res) => {
-  try {
-    cleanupOAuthStates(req.userSession)
-    const customClientId = getBodyTrimmed(req, "clientId")
-    const customClientSecret = getBodyTrimmed(req, "clientSecret")
-    if (!customClientId || !customClientSecret) {
-      return res.status(400).json({ error: "Both Client ID and Client Secret are required." })
-    }
-    const clientId = customClientId
-    const clientSecret = customClientSecret
+  const { clientId, clientSecret, redirectUri: reqRedirectUri } = req.body
+  const actualClientId = (clientId || CLIENT_ID || "").trim()
+  const actualClientSecret = (clientSecret || CLIENT_SECRET || "").trim()
 
-    const redirectUri = resolveRedirectUri(req)
-    const state = makeOAuthStateToken()
-    req.userSession.oauthStates[state] = {
-      clientId,
-      clientSecret,
-      redirectUri,
-      createdAt: Date.now()
-    }
-    await req.saveUserSession()
-
-    const url =
-      `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(GOOGLE_OAUTH_SCOPE)}&access_type=offline&prompt=consent&state=${encodeURIComponent(state)}`
-    return res.json({ url })
-  } catch (err) {
-    logError(err)
-    return res.status(500).json({ error: "Unable to start Google login." })
+  if (!actualClientId || !actualClientSecret) {
+    return res.status(400).json({ error: "Missing Google OAuth credentials" })
   }
-})
 
-app.get("/auth/mega", (req, res) => {
-  res.redirect("/mega-login.html")
-})
+  const proto = req.headers["x-forwarded-proto"] || req.protocol || "http"
+  const host = req.headers["x-forwarded-host"] || req.get("host")
+  const redirectUri = reqRedirectUri || REDIRECT_URI || `${proto}://${host}/auth/google/callback`
 
-app.post("/auth/mega/login", async (req, res) => {
-  try {
-    const email = getBodyTrimmed(req, "email")
-    const password = getBodyRaw(req, "password")
-    const secondFactorCode = getBodyTrimmed(req, "secondFactorCode")
-    await connectMegaAccountWithCredentials(req.userSession, { email, password, secondFactorCode })
-    await req.saveUserSession()
-    res.redirect("/")
-  } catch (err) {
-    const msg = err && err.message ? err.message : "Unable to login to MEGA"
-    res.redirect("/mega-login.html?error=" + encodeURIComponent(msg))
+  const stateToken = "g_" + Date.now() + "_" + Math.random().toString(36).slice(2)
+  req.userSession.oauthStates = req.userSession.oauthStates || {}
+  req.userSession.oauthStates[stateToken] = {
+    clientId: actualClientId,
+    clientSecret: actualClientSecret,
+    redirectUri,
+    createdAt: Date.now()
   }
-})
 
-app.post("/auth/mega/login-json", async (req, res) => {
-  try {
-    const email = getBodyTrimmed(req, "email")
-    const password = getBodyRaw(req, "password")
-    const secondFactorCode = getBodyTrimmed(req, "secondFactorCode")
-    const accountEmail = await connectMegaAccountWithCredentials(req.userSession, { email, password, secondFactorCode })
-    await req.saveUserSession()
-    return res.json({ success: true, email: accountEmail })
-  } catch (err) {
-    const msg = err && err.message ? err.message : "Unable to login to MEGA"
-    return res.status(400).json({ error: msg })
-  }
-})
+  const authUrl = "https://accounts.google.com/o/oauth2/v2/auth?" + new URLSearchParams({
+    client_id: actualClientId,
+    redirect_uri: redirectUri,
+    response_type: "code",
+    scope: GOOGLE_OAUTH_SCOPE,
+    access_type: "offline",
+    prompt: "consent",
+    state: stateToken
+  }).toString()
 
-app.post("/auth/mega/token", (req, res) => {
-  connectMegaAccount(req.userSession)
-    .then(async () => {
-      await req.saveUserSession()
-      res.redirect("/")
-    })
-    .catch((err) => {
-      const msg = encodeURIComponent(err && err.message ? err.message : "Unable to connect MEGA token")
-      res.redirect("/mega-login.html?error=" + msg)
-    })
-})
-
-app.post("/auth/mega/token-json", async (req, res) => {
-  try {
-    const email = await connectMegaAccount(req.userSession)
-    await req.saveUserSession()
-    return res.json({ success: true, email })
-  } catch (err) {
-    const msg = err && err.message ? err.message : "Unable to connect MEGA token"
-    return res.status(400).json({ error: msg })
-  }
+  res.json({ url: authUrl })
 })
 
 app.get("/auth/google/callback", async (req, res) => {
+  const { code, state, error } = req.query
+  if (error || !code || !state) return res.redirect("/?error=auth_failed")
+
+  const oauthState = req.userSession?.oauthStates?.[state]
+  if (!oauthState) return res.redirect("/?error=invalid_state")
+
   try {
-    const code = req.query.code
-    const state = getQueryTrimmed(req, "state")
-    cleanupOAuthStates(req.userSession)
-
-    const oauthStates = req.userSession.oauthStates || {}
-    if (!state || !oauthStates[state]) {
-      return res.status(400).send("OAuth session expired. Start Google sign-in again.")
-    }
-    const stateData = oauthStates[state]
-    delete oauthStates[state]
-    req.userSession.oauthStates = oauthStates
-    await req.saveUserSession()
-    const oauthClientId = stateData.clientId
-    const oauthClientSecret = stateData.clientSecret
-    const oauthRedirectUri = stateData.redirectUri || resolveRedirectUri(req)
-
-    const tokenResponse = await axios.post(GOOGLE_TOKEN_URL, {
+    const tokenResponse = await axios.post(GOOGLE_TOKEN_URL, new URLSearchParams({
+      client_id: oauthState.clientId,
+      client_secret: oauthState.clientSecret,
       code,
-      client_id: oauthClientId,
-      client_secret: oauthClientSecret,
-      redirect_uri: oauthRedirectUri,
-      grant_type: "authorization_code"
+      grant_type: "authorization_code",
+      redirect_uri: oauthState.redirectUri
+    }).toString(), {
+      headers: { "Content-Type": "application/x-www-form-urlencoded" }
     })
 
     const accessToken = tokenResponse.data.access_token
-    const profileResponse = await axios.get(GOOGLE_PROFILE_URL, {
-      headers: authHeaders(accessToken)
-    })
+    const refreshToken = tokenResponse.data.refresh_token || ""
+    const expiresIn = tokenResponse.data.expires_in || 3600
+    const infoResponse = await axios.get(GOOGLE_PROFILE_URL, { headers: authHeaders(accessToken) })
+    const email = infoResponse.data.email
 
     upsertAccount(req.userSession, {
       provider: "google",
-      email: profileResponse.data.email,
-      token: accessToken
+      email,
+      token: accessToken,
+      refreshToken: refreshToken,
+      clientId: oauthState.clientId,
+      clientSecret: oauthState.clientSecret,
+      expiresAt: Date.now() + expiresIn * 1000
     })
-    await req.saveUserSession()
-
-    console.log("Google account connected")
+    delete req.userSession.oauthStates[state]
     res.redirect("/")
   } catch (err) {
-    logError(err)
-    res.send("OAuth Error")
+    console.error(err)
+    res.redirect("/?error=token_failed")
   }
 })
 
 app.get("/storage", async (req, res) => {
-  try {
-    const results = []
+  const accounts = Array.isArray(req.userSession?.accounts) ? req.userSession.accounts : []
+  let totalUsage = 0
+  let totalLimit = 0
+  const accountStats = []
 
-    const sessionAccounts = Array.isArray(req.userSession.accounts) ? req.userSession.accounts : []
-    for (const account of sessionAccounts) {
-      if (account.provider === "mega") {
-        const storage = await ensureMegaStorageForAccount(account)
-        const info = await storage.getAccountInfo()
-        const email = account.email || buildMegaEmail(storage)
-        const givenName = getFirstNameFromEmail(email)
-
-        results.push({
-          provider: "mega",
-          user: {
-            emailAddress: email,
-            displayName: givenName || "MEGA",
-            givenName,
-            photoLink: ""
-          },
-          storageQuota: {
-            usage: Number(info.spaceUsed || 0),
-            limit: Number(info.spaceTotal || 0),
-            usageInDrive: Number(info.spaceUsed || 0),
-            usageInDriveTrash: 0
-          }
-        })
-        continue
-      }
-
-      const [driveResponse, profileResponse] = await Promise.all([
-        axios.get(DRIVE_ABOUT_URL, { headers: authHeaders(account.token) }),
-        axios.get(GOOGLE_PROFILE_URL, { headers: authHeaders(account.token) })
-      ])
-
-      const driveUser = driveResponse.data.user || {}
-      const profile = profileResponse.data || {}
-      const email = driveUser.emailAddress || profile.email
-      const displayName = driveUser.displayName || profile.name || ""
-
-      results.push({
-        provider: "google",
-        ...driveResponse.data,
-        user: {
-          ...driveUser,
-          emailAddress: email,
-          displayName,
-          givenName: profile.given_name || getFirstNameFromDisplayName(displayName) || getFirstNameFromEmail(email),
-          photoLink: driveUser.photoLink || profile.picture
-        }
-      })
+  await Promise.all(accounts.map(async (acc) => {
+    try {
+      await getFreshAccessToken(acc, req)
+      const info = await fetchGoogleAccountInfo(acc)
+      const usage = Number(info.storageQuota?.usage || 0)
+      const limit = Number(info.storageQuota?.limit || 0)
+      totalUsage += usage
+      totalLimit += limit
+      accountStats.push({ email: acc.email, usage, limit, error: null, info })
+    } catch (err) {
+      const msg = err.response?.data?.error?.message || err.message
+      accountStats.push({ email: acc.email, usage: 0, limit: 0, error: msg, info: null })
     }
+  }))
 
-    res.json(results)
-  } catch (err) {
-    logError(err)
-    res.send("Error fetching storage info")
-  }
+  res.json({ totalUsage, totalLimit, accounts: accountStats })
 })
 
 app.post("/logout", (req, res) => {
-  const email = req.body?.email
-  const provider = normalizeProvider(req.body?.provider)
-
-  if (!email) {
-    return res.status(400).json({ error: "Email is required" })
-  }
-
-  const sessionAccounts = Array.isArray(req.userSession.accounts) ? req.userSession.accounts : []
-  const previousLength = sessionAccounts.length
-  req.userSession.accounts = sessionAccounts.filter((account) => {
-    const sameEmail = normalizeEmail(account.email) === normalizeEmail(email)
-    if (!sameEmail) return true
-    if (provider) return normalizeProvider(account.provider) !== provider
-    return false
-  })
-
-  if (req.userSession.accounts.length === previousLength) {
-    return res.status(404).json({ error: "Account not found" })
-  }
-
-  req.saveUserSession().catch(() => { })
+  const { email } = req.body
+  if (!email) return res.status(400).json({ error: "Missing email" })
+  
+  const current = Array.isArray(req.userSession.accounts) ? req.userSession.accounts : []
+  req.userSession.accounts = current.filter(a => normalizeEmail(a.email) !== normalizeEmail(email))
   res.json({ success: true })
 })
 
-app.get("/session/export", (req, res) => {
-  try {
-    return res.json({ accounts: exportSessionAccountsForClient(req.userSession) })
-  } catch (err) {
-    logError(err)
-    return res.status(500).json({ error: "Unable to export session" })
-  }
-})
-
-app.post("/session/restore", async (req, res) => {
-  try {
-    const source = Array.isArray(req.body?.accounts) ? req.body.accounts : []
-    const restored = []
-    for (const raw of source) {
-      const provider = normalizeProvider(raw?.provider)
-      const email = normalizeEmail(raw?.email)
-      if (!provider || !email) continue
-
-      if (provider === "mega") {
-        const megaSessionToken = typeof raw?.megaSessionToken === "string" ? raw.megaSessionToken.trim() : ""
-        if (!megaSessionToken) continue
-        upsertAccount(req.userSession, {
-          provider: "mega",
-          email,
-          megaSessionToken
-        })
-        restored.push({ provider: "mega", email })
-        continue
-      }
-
-      const token = typeof raw?.token === "string" ? raw.token.trim() : ""
-      if (!token) continue
-      upsertAccount(req.userSession, {
-        provider: "google",
-        email,
-        token
-      })
-      restored.push({ provider: "google", email })
-    }
-
-    await req.saveUserSession()
-    return res.json({ success: true, restored })
-  } catch (err) {
-    logError(err)
-    return res.status(500).json({ error: "Unable to restore session" })
-  }
-})
-
 app.get("/files", async (req, res) => {
+  const parentId = req.query.parentId || "root"
+  const accountEmail = req.query.accountEmail
+  const accounts = Array.isArray(req.userSession?.accounts) ? req.userSession.accounts : []
+  
   try {
-    const email = getQueryTrimmed(req, "email")
-    const provider = getQueryTrimmed(req, "provider")
-
-    if (!email) {
-      return res.status(400).json({ error: "Query parameter email is required" })
-    }
-
-    const parentId = getQueryTrimmed(req, "parentId") || "root"
-    const account = getAccountByEmail(req.userSession, email, provider)
-    if (!account) {
-      return res.status(404).json({ error: "Account not found" })
-    }
-
-    if (account.provider === "mega") {
-      const items = await listMegaChildren(await ensureMegaStorageForAccount(account), parentId)
-      return res.json({ parentId, items })
-    }
-
-    if (parentId === "__shared_drives__") {
-      const items = await listSharedDrives(account.token)
-      return res.json({ parentId, items })
-    }
-
-    const items = await listChildrenInFolder(account.token, parentId)
-    res.json({ parentId, items })
-  } catch (err) {
-    sendErrorJson(res, err, "Error fetching files")
-  }
-})
-
-app.get("/open-file", async (req, res) => {
-  try {
-    const email = getQueryTrimmed(req, "email")
-    const provider = getQueryTrimmed(req, "provider")
-    const fileId = getQueryTrimmed(req, "fileId")
-
-    if (!email || !fileId) {
-      return res.status(400).json({ error: "Query parameters email and fileId are required" })
-    }
-
-    const account = getAccountByEmail(req.userSession, email, provider)
-    if (!account) {
-      return res.status(404).json({ error: "Account not found" })
-    }
-
-    if (account.provider === "mega") {
-      const storage = await ensureMegaStorageForAccount(account)
-      await storage.reload(true)
-      const node = getMegaNodeById(storage, fileId)
-      if (!node) {
-        return res.status(404).json({ error: "File not found" })
-      }
-      if (node.directory) {
-        return res.status(400).json({ error: "Cannot open a folder link from this endpoint" })
-      }
-
-      const megaUrl = await node.link(false)
-      return res.redirect(megaUrl)
-    }
-
-    const response = await axios.get(`${DRIVE_FILES_URL}/${encodeURIComponent(fileId)}`, {
-      headers: authHeaders(account.token),
-      params: {
-        fields: "id, webViewLink, webContentLink, mimeType",
-        supportsAllDrives: true
-      }
-    })
-    const openUrl = response.data?.webViewLink || response.data?.webContentLink
-    if (!openUrl) {
-      return res.status(404).json({ error: "No open link available for this file" })
-    }
-    return res.redirect(openUrl)
-  } catch (err) {
-    sendErrorJson(res, err, "Error opening file")
-  }
-})
-
-app.get("/search", async (req, res) => {
-  try {
-    const query = getQueryTrimmed(req, "q")
-    if (!query) {
-      return res.status(400).json({ error: "Query parameter q is required" })
-    }
-
-    const sessionAccounts = Array.isArray(req.userSession.accounts) ? req.userSession.accounts : []
-    if (sessionAccounts.length === 0) {
-      return res.json({ query, results: [] })
-    }
-
-    const escapedQuery = escapeDriveContains(query)
-    const driveQuery = `name contains '${escapedQuery}' and trashed=false`
-
-    const tasks = sessionAccounts.map(async (account) => {
-      if (account.provider === "mega") {
-        const storage = await ensureMegaStorageForAccount(account)
-        await storage.reload(true)
-        const needle = query.toLowerCase()
-
-        return (storage.filter(() => true, true) || [])
-          .filter((node) => node && node.name && String(node.name).toLowerCase().includes(needle))
-          .slice(0, 100)
-          .map((node) => ({
-            ...normalizeMegaNode(node, node.parent ? node.parent.nodeId : "root"),
-            accountEmail: account.email,
-            accountProvider: account.provider
-          }))
-      }
-
-      const response = await axios.get(DRIVE_FILES_URL, {
-        headers: authHeaders(account.token),
-        params: {
-          q: driveQuery,
-          pageSize: 100,
-          fields: "files(id, name, mimeType, size, modifiedTime, webViewLink, driveId, parents)",
-          orderBy: "modifiedTime desc",
-          supportsAllDrives: true,
-          includeItemsFromAllDrives: true,
-          corpora: "allDrives"
+    let allFiles = []
+    
+    if (parentId === "root" && !accountEmail) {
+      // Combined View: Fetch from all accounts
+      await Promise.all(accounts.map(async (acc) => {
+        try {
+          const token = await getFreshAccessToken(acc, req)
+          const files = await listChildrenInFolder(token, "root")
+          const mapped = files.map(f => ({ ...f, accountEmail: acc.email, provider: "google" }))
+          allFiles.push(...mapped)
+        } catch (e) {
+          console.error(`Failed to fetch root for ${acc.email}`, e.message)
         }
-      })
-
-      return (response.data.files || []).map((file) => ({
-        ...file,
-        accountEmail: account.email,
-        accountProvider: account.provider
       }))
-    })
-
-    const perAccountResults = await Promise.all(tasks)
-    res.json({ query, results: perAccountResults.flat() })
+    } else {
+      // Fetch from specific account
+      if (!accountEmail) return res.status(400).json({ error: "accountEmail is required when navigating into a folder or specific account" })
+      const acc = getAccountByEmail(req.userSession, accountEmail)
+      if (!acc) return res.status(404).json({ error: "Account not found" })
+      
+      const token = await getFreshAccessToken(acc, req)
+      const files = await listChildrenInFolder(token, parentId)
+      allFiles = files.map(f => ({ ...f, accountEmail: acc.email, provider: "google" }))
+    }
+    
+    res.json({ items: allFiles })
   } catch (err) {
-    sendErrorJson(res, err, "Error searching files")
-  }
-})
-
-app.post("/delete-item", async (req, res) => {
-  try {
-    const email = getBodyTrimmed(req, "email")
-    const provider = getBodyTrimmed(req, "provider")
-    const fileId = getBodyTrimmed(req, "fileId")
-
-    if (!email || !fileId) {
-      return res.status(400).json({ error: "email and fileId are required" })
-    }
-
-    const account = getAccountByEmail(req.userSession, email, provider)
-    if (!account) {
-      return res.status(404).json({ error: "Account not found" })
-    }
-
-    if (account.provider === "mega") {
-      return res.status(403).json({ error: "Delete feature is only available in Google Drive account for now. i am working on it, stay tuned!" })
-    }
-
-    await axios.delete(`${DRIVE_FILES_URL}/${encodeURIComponent(fileId)}`, {
-      headers: authHeaders(account.token),
-      params: { supportsAllDrives: true }
-    })
-
-    res.json({ success: true })
-  } catch (err) {
-    sendErrorJson(res, err, "Error deleting file")
-  }
-})
-
-app.post("/copy-item", async (req, res) => {
-  try {
-    const email = getBodyTrimmed(req, "email")
-    const provider = getBodyTrimmed(req, "provider")
-    const fileId = getBodyTrimmed(req, "fileId")
-    const destinationFolderId = getBodyTrimmed(req, "destinationFolderId")
-
-    if (!email || !fileId || !destinationFolderId) {
-      return res.status(400).json({ error: "email, fileId and destinationFolderId are required" })
-    }
-
-    const account = getAccountByEmail(req.userSession, email, provider)
-    if (!account) {
-      return res.status(404).json({ error: "Account not found" })
-    }
-
-    if (account.provider === "mega") {
-      const storage = await ensureMegaStorageForAccount(account)
-      await storage.reload(true)
-      const source = getMegaNodeById(storage, fileId)
-      const target = destinationFolderId === "root" ? storage.root : getMegaNodeById(storage, destinationFolderId)
-      if (!source || !target || !target.directory) {
-        return res.status(404).json({ error: "Source or destination not found" })
-      }
-      await source.copyTo(target)
-      return res.json({ success: true })
-    }
-
-    await axios.post(
-      `${DRIVE_FILES_URL}/${encodeURIComponent(fileId)}/copy`,
-      { parents: [destinationFolderId] },
-      {
-        headers: {
-          ...authHeaders(account.token),
-          "Content-Type": "application/json"
-        },
-        params: { supportsAllDrives: true }
-      }
-    )
-
-    res.json({ success: true })
-  } catch (err) {
-    sendErrorJson(res, err, "Error copying file")
-  }
-})
-
-app.post("/move-item", async (req, res) => {
-  try {
-    const email = getBodyTrimmed(req, "email")
-    const provider = getBodyTrimmed(req, "provider")
-    const fileId = getBodyTrimmed(req, "fileId")
-    const destinationFolderId = getBodyTrimmed(req, "destinationFolderId")
-
-    if (!email || !fileId || !destinationFolderId) {
-      return res.status(400).json({ error: "email, fileId and destinationFolderId are required" })
-    }
-
-    const account = getAccountByEmail(req.userSession, email, provider)
-    if (!account) {
-      return res.status(404).json({ error: "Account not found" })
-    }
-
-    if (account.provider === "mega") {
-      const storage = await ensureMegaStorageForAccount(account)
-      await storage.reload(true)
-      const source = getMegaNodeById(storage, fileId)
-      const target = destinationFolderId === "root" ? storage.root : getMegaNodeById(storage, destinationFolderId)
-      if (!source || !target || !target.directory) {
-        return res.status(404).json({ error: "Source or destination not found" })
-      }
-      await source.moveTo(target)
-      return res.json({ success: true })
-    }
-
-    const currentFile = await axios.get(`${DRIVE_FILES_URL}/${encodeURIComponent(fileId)}`, {
-      headers: authHeaders(account.token),
-      params: { fields: "parents", supportsAllDrives: true }
-    })
-
-    const existingParents = Array.isArray(currentFile.data?.parents) ? currentFile.data.parents.filter(Boolean) : []
-    const removeParents = existingParents.join(",")
-    const params = { addParents: destinationFolderId, supportsAllDrives: true }
-    if (removeParents) params.removeParents = removeParents
-
-    await axios.patch(`${DRIVE_FILES_URL}/${encodeURIComponent(fileId)}`, null, {
-      headers: authHeaders(account.token),
-      params
-    })
-
-    res.json({ success: true })
-  } catch (err) {
-    sendErrorJson(res, err, "Error moving file")
+    res.status(500).json({ error: err.message })
   }
 })
 
 app.post("/create-folder", async (req, res) => {
-  try {
-    const email = getBodyTrimmed(req, "email")
-    const provider = getBodyTrimmed(req, "provider")
-    const parentId = getBodyTrimmed(req, "parentId") || "root"
-    const folderName = getBodyTrimmed(req, "folderName")
-
-    if (!email || !folderName) {
-      return res.status(400).json({ error: "email and folderName are required" })
-    }
-
-    if (parentId === "__shared_drives__") {
-      return res.status(400).json({ error: "Open a destination folder first" })
-    }
-
-    const account = getAccountByEmail(req.userSession, email, provider)
-    if (!account) {
-      return res.status(404).json({ error: "Account not found" })
-    }
-
-    if (account.provider === "mega") {
-      const storage = await ensureMegaStorageForAccount(account)
-      await storage.reload(true)
-      const targetFolder = parentId === "root" ? storage.root : getMegaNodeById(storage, parentId)
-      if (!targetFolder || !targetFolder.directory) {
-        return res.status(404).json({ error: "Destination folder not found" })
-      }
-      const created = await targetFolder.mkdir(folderName)
-      await storage.reload(true)
-      return res.json({ success: true, item: normalizeMegaNode(created, targetFolder.nodeId || "root") })
-    }
-
-    const response = await axios.post(
-      DRIVE_FILES_URL,
-      {
-        name: folderName,
-        mimeType: FOLDER_MIME,
-        parents: [parentId]
-      },
-      {
-        headers: {
-          ...authHeaders(account.token),
-          "Content-Type": "application/json"
-        },
-        params: {
-          fields: "id,name,mimeType,size,modifiedTime,webViewLink,parents,driveId",
-          supportsAllDrives: true
-        }
-      }
-    )
-
-    return res.json({ success: true, item: response.data })
-  } catch (err) {
-    sendErrorJson(res, err, "Error creating folder")
-  }
-})
-
-
-app.post("/upload-item-stream", async (req, res) => {
-  const bb = busboy({
-    headers: req.headers,
-    limits: { fileSize: 10 * 1024 * 1024 * 1024 }
-  })
-
-  const fields = {}
-  let responded = false
-
-  function safeRespond(status, body) {
-    if (responded) return
-    responded = true
-    res.status(status).json(body)
-  }
-
-  bb.on("field", (name, val) => {
-    fields[name] = String(val).trim()
-  })
-
-  bb.on("file", async (_fieldname, fileStream, info) => {
-    const email = fields.email || getQueryTrimmed({ query: req.headers }, "x-upload-email")
-    const provider = fields.provider || getQueryTrimmed({ query: req.headers }, "x-upload-provider")
-    const parentId = fields.parentId || getQueryTrimmed({ query: req.headers }, "x-upload-parent-id")
-    const uploadId = fields.uploadId || getQueryTrimmed({ query: req.headers }, "x-upload-id")
-    const fileName = info.filename || "upload.bin"
-    const fileMime = info.mimeType || "application/octet-stream"
-    const fileSize = parseInt(req.headers["x-file-size"] || "0", 10) || 0
-
-    if (!email || !parentId) {
-      fileStream.resume()
-      return safeRespond(400, { error: "email and parentId are required" })
-    }
-
-    const account = getAccountByEmail(req.userSession, email, provider)
-    if (!account) {
-      fileStream.resume()
-      return safeRespond(404, { error: "Account not found" })
-    }
-
-    setUploadProgress(uploadId, {
-      sessionId: req.sessionId,
-      status: "uploading",
-      phase: "initiating",
-      provider: normalizeProvider(account.provider),
-      fileName,
-      bytesUploaded: 0,
-      bytesTotal: fileSize,
-      message: "Preparing upload"
-    })
-
-    if (account.provider === "mega") {
+  const { parentId, name, accountEmail } = req.body
+  if (!name) return res.status(400).json({ error: "Folder name required" })
+  
+  let targetAccount = null
+  const accounts = Array.isArray(req.userSession?.accounts) ? req.userSession.accounts : []
+  
+  if ((parentId === "root" || !parentId) && !accountEmail) {
+    let bestAcc = null
+    let maxFree = -1
+    
+    await Promise.all(accounts.map(async (acc) => {
       try {
-        const storage = await ensureMegaStorageForAccount(account)
-        await storage.reload(true)
-
-        const targetFolder =
-          parentId === "root" ? storage.root : getMegaNodeById(storage, parentId)
-
-        if (!targetFolder || !targetFolder.directory) {
-          fileStream.resume()
-          return safeRespond(404, { error: "Destination folder not found" })
+        await getFreshAccessToken(acc, req)
+        const info = await fetchGoogleAccountInfo(acc)
+        const free = Number(info.storageQuota?.limit || 0) - Number(info.storageQuota?.usage || 0)
+        if (free > maxFree) {
+          maxFree = free
+          bestAcc = acc
         }
-
-        if (!fileSize || fileSize <= 0) {
-          fileStream.resume()
-          return safeRespond(400, { error: "x-file-size header is required for MEGA stream upload" })
-        }
-
-        setUploadProgress(uploadId, {
-          status: "uploading",
-          phase: "mega",
-          bytesUploaded: 0,
-          bytesTotal: fileSize,
-          message: "Uploading to MEGA"
-        })
-
-        const uploadStream = targetFolder.upload(
-          { name: fileName, size: fileSize, allowUploadBuffering: false },
-          fileStream
-        )
-        uploadStream.on("progress", (p) => {
-          const megaUploaded = Number(p?.bytesUploaded || 0)
-          const megaTotal = Number(p?.bytesTotal || fileSize)
-          setUploadProgress(uploadId, {
-            status: "uploading",
-            phase: "mega",
-            bytesUploaded: Math.max(0, Math.min(fileSize, megaUploaded)),
-            bytesTotal: Math.max(fileSize, megaTotal),
-            message: "Uploading to MEGA"
-          })
-        })
-
-        uploadStream.on("error", (err) => {
-          setUploadProgress(uploadId, {
-            status: "error",
-            phase: "error",
-            message: err && err.message ? err.message : "MEGA upload stream error"
-          })
-        })
-
-        await uploadStream.complete
-
-        setUploadProgress(uploadId, {
-          status: "done",
-          phase: "done",
-          bytesUploaded: fileSize,
-          bytesTotal: fileSize,
-          message: "Upload complete"
-        })
-        cleanupUploadProgress(uploadId)
-        return safeRespond(200, { success: true })
-      } catch (err) {
-        setUploadProgress(uploadId, { status: "error", phase: "error", message: err.message })
-        cleanupUploadProgress(uploadId, 60000)
-        logError(err)
-        return safeRespond(500, { error: err.message || "MEGA upload failed" })
-      }
-    }
-
-    try {
-      const metadata = { name: fileName, parents: [parentId] }
-
-      const startRes = await axios.post(DRIVE_UPLOAD_URL, metadata, {
-        headers: {
-          ...authHeaders(account.token),
-          "Content-Type": "application/json; charset=UTF-8",
-          "X-Upload-Content-Type": fileMime,
-          ...(fileSize ? { "X-Upload-Content-Length": String(fileSize) } : {})
-        },
-        params: {
-          uploadType: "resumable",
-          supportsAllDrives: true,
-          fields: "id,name,mimeType,size,modifiedTime,webViewLink,parents,driveId"
-        }
-      })
-
-      const resumableUrl = startRes.headers.location || startRes.headers.Location
-      if (!resumableUrl) {
-        fileStream.resume()
-        return safeRespond(500, { error: "Could not start Google upload session" })
-      }
-
-      setUploadProgress(uploadId, {
-        status: "uploading",
-        phase: "google",
-        bytesUploaded: 0,
-        bytesTotal: fileSize,
-        message: "Streaming to Google Drive"
-      })
-
-      let bytesUploaded = 0
-      fileStream.on("data", (chunk) => {
-        bytesUploaded += chunk.length
-        setUploadProgress(uploadId, {
-          bytesUploaded,
-          bytesTotal: fileSize || bytesUploaded,
-          message: "Streaming to Google Drive"
-        })
-      })
-
-      const uploadRes = await axios.put(resumableUrl, fileStream, {
-        headers: {
-          "Content-Type": fileMime,
-          ...(fileSize
-            ? { "Content-Length": String(fileSize) }
-            : { "Transfer-Encoding": "chunked" })
-        },
-        maxBodyLength: Infinity,
-        maxContentLength: Infinity
-      })
-
-      const doneBytes = Math.max(bytesUploaded, fileSize, 0)
-      setUploadProgress(uploadId, {
-        status: "done",
-        phase: "done",
-        bytesUploaded: doneBytes,
-        bytesTotal: fileSize || doneBytes,
-        message: "Upload complete"
-      })
-      cleanupUploadProgress(uploadId)
-      return safeRespond(200, { success: true, item: uploadRes.data })
-    } catch (err) {
-      setUploadProgress(uploadId, { status: "error", phase: "error", message: err.message })
-      cleanupUploadProgress(uploadId, 60000)
-      logError(err)
-      return safeRespond(500, { error: err.message || "Google Drive upload failed" })
-    }
-  })
-
-  bb.on("error", (err) => {
-    logError(err)
-    if (!responded) {
-      responded = true
-      res.status(500).json({ error: "Multipart parse error: " + err.message })
-    }
-  })
-
-  req.pipe(bb)
+      } catch (e) {}
+    }))
+    
+    targetAccount = bestAcc
+  } else {
+    targetAccount = getAccountByEmail(req.userSession, accountEmail)
+  }
+  
+  if (!targetAccount) return res.status(400).json({ error: "Could not determine target account" })
+  
+  try {
+    const token = await getFreshAccessToken(targetAccount, req)
+    const response = await axios.post(DRIVE_FILES_URL, {
+      name,
+      mimeType: FOLDER_MIME,
+      parents: [parentId || "root"]
+    }, {
+      headers: authHeaders(token),
+      params: { supportsAllDrives: true }
+    })
+    res.json(response.data)
+  } catch (err) {
+    const status = err.response?.status || 500
+    const msg = err.response?.data?.error?.message || err.message
+    res.status(status).json({ error: msg })
+  }
 })
 
 app.post("/upload-item", upload.single("file"), async (req, res) => {
-  try {
-    const email = getBodyTrimmed(req, "email")
-    const provider = getBodyTrimmed(req, "provider")
-    const parentId = getBodyTrimmed(req, "parentId")
-    const uploadId = getBodyTrimmed(req, "uploadId")
-    const file = req.file
-
-    if (!email || !parentId || !file) {
-      return res.status(400).json({ error: "email, parentId and file are required" })
-    }
-
-    setUploadProgress(uploadId, {
-      sessionId: req.sessionId,
-      status: "received",
-      phase: "server",
-      provider: normalizeProvider(provider),
-      fileName: file.originalname || "upload.bin",
-      bytesUploaded: 0,
-      bytesTotal: Number(file.size || 0),
-      message: "File received by server"
-    })
-
-    const account = getAccountByEmail(req.userSession, email, provider)
-    if (!account) {
-      return res.status(404).json({ error: "Account not found" })
-    }
-
-    if (account.provider === "mega") {
-      const storage = await ensureMegaStorageForAccount(account)
-      await storage.reload(true)
-      const targetFolder = parentId === "root" ? storage.root : getMegaNodeById(storage, parentId)
-      if (!targetFolder || !targetFolder.directory) {
-        return res.status(404).json({ error: "Destination folder not found" })
-      }
-
-      const uploadStream = targetFolder.upload({ name: file.originalname || "upload.bin" }, file.buffer)
-      setUploadProgress(uploadId, {
-        status: "uploading",
-        phase: "mega",
-        bytesUploaded: 0,
-        bytesTotal: Number(file.size || 0),
-        message: "Uploading to MEGA"
-      })
-      uploadStream.on("progress", (p) => {
-        const up = Number(p && p.bytesUploaded ? p.bytesUploaded : 0)
-        const total = Number(p && p.bytesTotal ? p.bytesTotal : file.size || 0)
-        setUploadProgress(uploadId, {
-          status: "uploading",
-          phase: "mega",
-          bytesUploaded: up,
-          bytesTotal: total,
-          message: "Uploading to MEGA"
-        })
-      })
-      await uploadStream.complete
-      setUploadProgress(uploadId, {
-        status: "done",
-        phase: "done",
-        bytesUploaded: Number(file.size || 0),
-        bytesTotal: Number(file.size || 0),
-        message: "Upload complete"
-      })
-      cleanupUploadProgress(uploadId)
-      return res.json({ success: true })
-    }
-
-    const metadata = {
-      name: file.originalname || "upload.bin",
-      parents: [parentId]
-    }
-
-    // Google upload path: initiate resumable session, then stream media bytes to Drive.
-    // This avoids local disk storage and sends bytes directly to Google.
-    const startRes = await axios.post(DRIVE_UPLOAD_URL, metadata, {
-      headers: {
-        ...authHeaders(account.token),
-        "Content-Type": "application/json; charset=UTF-8",
-        "X-Upload-Content-Type": file.mimetype || "application/octet-stream",
-        "X-Upload-Content-Length": String(Number(file.size || 0))
-      },
-      params: {
-        uploadType: "resumable",
-        supportsAllDrives: true,
-        fields: "id,name,mimeType,size,modifiedTime,webViewLink,parents,driveId"
-      }
-    })
-    const resumableUrl = startRes.headers && (startRes.headers.location || startRes.headers.Location)
-    if (!resumableUrl) {
-      return res.status(500).json({ error: "Could not start Google upload session" })
-    }
-
-    setUploadProgress(uploadId, {
-      status: "uploading",
-      phase: "google",
-      bytesUploaded: 0,
-      bytesTotal: Number(file.size || 0),
-      message: "Uploading to Google Drive"
-    })
-
-    const response = await axios.put(resumableUrl, file.buffer, {
-      headers: {
-        "Content-Type": file.mimetype || "application/octet-stream",
-        "Content-Length": String(Number(file.size || 0))
-      },
-      onUploadProgress: (ev) => {
-        const loaded = Number(ev && ev.loaded ? ev.loaded : 0)
-        const total = Number(ev && ev.total ? ev.total : file.size || 0)
-        setUploadProgress(uploadId, {
-          status: "uploading",
-          phase: "google",
-          bytesUploaded: loaded,
-          bytesTotal: total,
-          message: "Uploading to Google Drive"
-        })
-      }
-    })
-
-    setUploadProgress(uploadId, {
-      status: "done",
-      phase: "done",
-      bytesUploaded: Number(file.size || 0),
-      bytesTotal: Number(file.size || 0),
-      message: "Upload complete"
-    })
-    cleanupUploadProgress(uploadId)
-    res.json({ success: true, item: response.data })
-  } catch (err) {
-    const uploadId = getBodyTrimmed(req, "uploadId")
-    setUploadProgress(uploadId, {
-      status: "error",
-      phase: "error",
-      message: err && err.message ? err.message : "Upload failed"
-    })
-    cleanupUploadProgress(uploadId, 60 * 1000)
-    sendErrorJson(res, err, "Error uploading file")
-  }
-})
-
-app.get("/upload-progress", async (req, res) => {
-  const uploadId = getQueryTrimmed(req, "uploadId")
-  if (!uploadId) {
-    return res.status(400).json({ error: "uploadId is required" })
-  }
-  let state = null
-  if (HAS_UPSTASH) {
-    state = await redisGetJson(`multidrive:progress:${uploadId}`).catch(() => null)
+  const file = req.file
+  const parentId = req.body.parentId || "root"
+  const accountEmail = req.body.accountEmail
+  
+  if (!file) return res.status(400).json({ error: "No file uploaded" })
+  
+  let targetAccount = null
+  const accounts = Array.isArray(req.userSession?.accounts) ? req.userSession.accounts : []
+  
+  if (parentId === "root" && !accountEmail) {
+    let bestAcc = null
+    let maxFree = -1
+    await Promise.all(accounts.map(async (acc) => {
+      try {
+        await getFreshAccessToken(acc, req)
+        const info = await fetchGoogleAccountInfo(acc)
+        const free = Number(info.storageQuota?.limit || 0) - Number(info.storageQuota?.usage || 0)
+        if (free > maxFree) {
+          maxFree = free
+          bestAcc = acc
+        }
+      } catch (e) {}
+    }))
+    targetAccount = bestAcc
   } else {
-    state = uploadProgress.get(uploadId)
+    targetAccount = getAccountByEmail(req.userSession, accountEmail)
   }
-  if (!state || String(state.sessionId || "") !== String(req.sessionId || "")) {
-    return res.json({ status: "unknown" })
+  
+  if (!targetAccount) return res.status(400).json({ error: "Could not determine target account" })
+  
+  try {
+    const token = await getFreshAccessToken(targetAccount, req)
+    const metadata = { name: file.originalname, parents: [parentId] }
+    const boundary = "-------314159265358979323846"
+    const delimiter = "\r\n--" + boundary + "\r\n"
+    const close_delim = "\r\n--" + boundary + "--"
+
+    const metadataPart = "Content-Type: application/json\r\n\r\n" + JSON.stringify(metadata)
+    const mediaPart = "Content-Type: " + (file.mimetype || "application/octet-stream") + "\r\n\r\n"
+
+    const bodyBuffer = Buffer.concat([
+      Buffer.from("--" + boundary + "\r\n" + metadataPart + "\r\n--" + boundary + "\r\n" + mediaPart, "utf-8"),
+      file.buffer,
+      Buffer.from(close_delim, "utf-8")
+    ])
+
+    const response = await axios.post("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true", bodyBuffer, {
+      headers: {
+        ...authHeaders(token),
+        "Content-Type": `multipart/related; boundary=${boundary}`
+      }
+    })
+    
+    res.json(response.data)
+  } catch (err) {
+    const status = err.response?.status || 500
+    const msg = err.response?.data?.error?.message || err.message
+    res.status(status).json({ error: msg })
   }
-  res.json(state)
 })
 
-app.use((err, req, res, next) => {
-  if (err && err.code === "LIMIT_FILE_SIZE") {
-    return res.status(413).json({ error: "File too large. Max upload size is 1 GB." })
+app.post("/delete-item", async (req, res) => {
+  const { id, accountEmail } = req.body
+  if (!id || !accountEmail) return res.status(400).json({ error: "id and accountEmail required" })
+  
+  const acc = getAccountByEmail(req.userSession, accountEmail)
+  if (!acc) return res.status(404).json({ error: "Account not found" })
+  
+  try {
+    const token = await getFreshAccessToken(acc, req)
+    await axios.delete(`${DRIVE_FILES_URL}/${encodeURIComponent(id)}`, {
+      headers: authHeaders(token),
+      params: { supportsAllDrives: true }
+    })
+    res.json({ success: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
   }
-  if (err) {
-    return res.status(500).json({ error: err.message || "Server error" })
-  }
-  next()
 })
 
-const PORT = Number(process.env.PORT || 3000)
+app.get("/search", async (req, res) => {
+  const q = req.query.q
+  if (!q) return res.json({ results: [] })
+  
+  const accountEmail = req.query.accountEmail
+  const accounts = Array.isArray(req.userSession?.accounts) ? req.userSession.accounts : []
+  const allResults = []
+  
+  const escaped = escapeDriveQueryId(q)
+  const queryStr = `name contains '${escaped}' and trashed=false`
+  
+  let targetAccounts = accounts
+  if (accountEmail) {
+    targetAccounts = accounts.filter(acc => normalizeEmail(acc.email) === normalizeEmail(accountEmail))
+  }
+  
+  await Promise.all(targetAccounts.map(async (acc) => {
+    try {
+      const token = await getFreshAccessToken(acc, req)
+      const response = await axios.get(DRIVE_FILES_URL, {
+        headers: authHeaders(token),
+        params: {
+          q: queryStr,
+          pageSize: 100,
+          fields: DRIVE_FILES_FIELDS,
+          supportsAllDrives: true,
+          includeItemsFromAllDrives: true,
+          corpora: "user"
+        }
+      })
+      const mapped = (response.data.files || []).map(f => ({ ...f, accountEmail: acc.email, provider: "google" }))
+      allResults.push(...mapped)
+    } catch (e) {
+      console.error(e.message)
+    }
+  }))
+  
+  res.json({ results: allResults })
+})
 
-if (require.main === module) {
-  app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:3000/`)
-  })
-}
+app.get("/open-file", async (req, res) => {
+  const { id, accountEmail } = req.query
+  if (!id || !accountEmail) return res.status(400).send("Missing id or accountEmail")
+  
+  const acc = getAccountByEmail(req.userSession, accountEmail)
+  if (!acc) return res.status(404).send("Account not found")
+  
+  try {
+    const token = await getFreshAccessToken(acc, req)
+    const response = await axios.get(`${DRIVE_FILES_URL}/${encodeURIComponent(id)}`, {
+      headers: authHeaders(token),
+      params: { fields: "webViewLink", supportsAllDrives: true }
+    })
+    if (response.data.webViewLink) {
+      res.redirect(response.data.webViewLink)
+    } else {
+      res.status(404).send("Link not available")
+    }
+  } catch (err) {
+    res.status(500).send(err.message)
+  }
+})
 
-module.exports = app
+// Firebase endpoints
+app.get("/firebase/session", async (req, res) => {
+  const userRecord = await verifyFirebaseToken(req)
+  if (!userRecord) return res.status(401).json({ error: "Unauthorized" })
 
+  const firestoreAccounts = await loadFirestoreSession(userRecord.uid)
+  res.json({ accounts: firestoreAccounts })
+})
+
+app.post("/firebase/session", async (req, res) => {
+  const userRecord = await verifyFirebaseToken(req)
+  if (!userRecord) return res.status(401).json({ error: "Unauthorized" })
+
+  const accounts = Array.isArray(req.body?.accounts) ? req.body.accounts : []
+  const safeAccounts = accounts.map(sanitizeAccountForStore).filter(Boolean)
+
+  await saveFirestoreSession(userRecord.uid, safeAccounts)
+  res.json({ success: true })
+})
+
+app.get("/session/export", (req, res) => {
+  const list = Array.isArray(req.userSession?.accounts) ? req.userSession.accounts : []
+  const safeList = list.map(sanitizeAccountForStore).filter(Boolean)
+  res.json({ accounts: safeList })
+})
+
+app.post("/session/restore", async (req, res) => {
+  const accounts = Array.isArray(req.body?.accounts) ? req.body.accounts : []
+  const safeAccounts = accounts.map(sanitizeAccountForStore).filter(Boolean)
+  
+  req.userSession.accounts = safeAccounts
+  await req.saveUserSession()
+  res.json({ success: true })
+})
+
+app.use(express.static(clientDist))
+app.use((req, res, next) => {
+  if (req.method !== 'GET') return next()
+  if (fs.existsSync(path.join(clientDist, "index.html"))) {
+    res.sendFile(path.join(clientDist, "index.html"))
+  } else {
+    res.status(404).send("Client not built. Run npm run build in client/")
+  }
+})
+
+const PORT = process.env.PORT || 3000
+app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}/`))
