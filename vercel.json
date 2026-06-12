@@ -1,5 +1,5 @@
 {
-  "outputDirectory": "dist",
+  "outputDirectory": "client/dist",
   "rewrites": [
     {
       "source": "/(storage|session|files|create-folder|delete-item|search|open-file|firebase|logout|auth|upload-item)(.*)",

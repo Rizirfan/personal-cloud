@@ -52,7 +52,7 @@ Deploy your frontend as a static SPA on Vercel.
 5. If you deploy from the **main root folder**:
    - Keep **Root Directory** as `.`
    - Set **Build Command** to: `npm run build`
-   - Set **Output Directory** to: `dist`
+   - Set **Output Directory** to: `client/dist`
 6. Add the following **Environment Variables** in Vercel:
    
    | Key | Value |

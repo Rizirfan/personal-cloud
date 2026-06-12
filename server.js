@@ -48,7 +48,7 @@ app.use((req, res, next) => {
   }
   next()
 })
-const clientDist = path.join(__dirname, "dist")
+const clientDist = path.join(__dirname, "client", "dist")
 
 if (fs.existsSync(path.join(__dirname, "images"))) {
   app.use("/images", express.static(path.join(__dirname, "images")))
