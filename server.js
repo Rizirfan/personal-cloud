@@ -48,7 +48,7 @@ app.use((req, res, next) => {
   }
   next()
 })
-const clientDist = path.join(__dirname, "client", "dist")
+const clientDist = path.join(__dirname, "dist")
 
 if (fs.existsSync(path.join(__dirname, "images"))) {
   app.use("/images", express.static(path.join(__dirname, "images")))
@@ -766,7 +766,7 @@ app.use((req, res, next) => {
   if (fs.existsSync(path.join(clientDist, "index.html"))) {
     res.sendFile(path.join(clientDist, "index.html"))
   } else {
-    res.status(404).send("Client not built. Run npm run build in client/")
+    res.status(404).send("Client not built. Run npm run build")
   }
 })
 
