@@ -2,9 +2,9 @@ const crypto = require("crypto");
 require("dotenv").config();
 
 // Use a 32-byte key for AES-256-GCM from env, or generate a fallback
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY 
-  ? process.env.ENCRYPTION_KEY.padEnd(32, '0').substring(0, 32)
-  : "default_fallback_secret_key_12345"; // For dev if not set
+const ENCRYPTION_KEY = (process.env.ENCRYPTION_KEY || "default_fallback_secret_key_12345")
+  .padEnd(32, '0')
+  .substring(0, 32);
 
 function encryptText(text) {
   if (!text) return "";
