@@ -20,9 +20,21 @@ async function request(url, options = {}) {
   return data
 }
 
-export function getStorage() {
-  return request("/storage")
+function apiBaseUrl() {
+  // When deployed, the API is typically hosted on the same origin as the frontend.
+  // If the API is hosted at a different origin, set VITE_API_BASE_URL.
+  return (import.meta.env?.VITE_API_BASE_URL || '').toString().replace(/\/$/, '');
 }
+
+function withBase(path) {
+  const base = apiBaseUrl();
+  return base ? `${base}${path}` : path;
+}
+
+export function getStorage() {
+  return request(withBase("/storage"))
+}
+
 
 export function exportSession() {
   return request("/session/export")
@@ -51,12 +63,13 @@ export function searchFiles(query, accountEmail = null) {
 }
 
 export function startGoogleAuth(clientId, clientSecret, redirectUri) {
-  return request("/auth/google/start", {
+    return request("/auth/google/start", {
     method: "POST",
     headers: jsonHeaders,
     body: JSON.stringify({ clientId, clientSecret, redirectUri })
   })
 }
+
 
 export function logoutAccount(email) {
   return request("/logout", {
@@ -95,3 +108,4 @@ export function openFileUrl(fileId, accountEmail) {
   const params = new URLSearchParams({ id: fileId, accountEmail })
   return `/open-file?${params}`
 }
+
