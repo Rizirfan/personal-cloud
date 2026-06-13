@@ -6,6 +6,10 @@
       "destination": "https://personal-cloud-ng2q.onrender.com/$1$2"
     },
     {
+      "source": "/auth/google/start",
+      "destination": "https://personal-cloud-ng2q.onrender.com/auth/google/start"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
