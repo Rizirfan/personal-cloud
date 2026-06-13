@@ -3,7 +3,7 @@
   "rewrites": [
     {
       "source": "/(storage|session|files|create-folder|delete-item|search|open-file|firebase|logout|auth|upload-item)(.*)",
-      "destination": "https://personal-cloud-ng2q.onrender.com/"
+      "destination":  "https://personal-cloud-ng2q.onrender.com/$1$2"
     },
     {
       "source": "/(.*)",
