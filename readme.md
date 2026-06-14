@@ -1,21 +1,6 @@
 # Multi Drive
 
 **Multi Drive** is a single web interface that lets you connect multiple cloud accounts and browse/search files across them. It supports:
-
-- **Google Drive** (OAuth)
-- **MEGA** (UI indicates support; see “Limitations” below)
-- Unified browsing, upload, folder creation, move/copy (where supported), delete (Google Drive)
-- Per-account storage usage dashboard
-
----
-
-## Demo / Links
-
-- Setup Guide: https://multi-drives.vercel.app/guide.html
-- Demo Video: https://www.youtube.com/watch?v=NxMBscRX9ag
-- Demo Website: https://multi-drives.vercel.app/
-  - If you face any error, test using **localhost**.
-
 ---
 
 ## Quick Preview
