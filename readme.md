@@ -214,11 +214,18 @@ Example UI shot:
 - **“Client not built”**: run `npm --prefix client run build` (or simply use `npm start` from root).
 
 ---
+
 ![Homepage](./sc1.png)
+
+
 ![Homepage](./sc2.png)
+
+
 ![Homepage](./sc3.png)
+
+
 ![Homepage](./sc4.png)
-![Homepage](./sc5.png)
+
 
 ## License
 
