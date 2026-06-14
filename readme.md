@@ -203,7 +203,7 @@ Additional images in `Multi-Drive/images/`:
 
 Example UI shot:
 
-![Homepage](./Homepage.webp)
+![Homepage](./Homepage.png)
 
 ---
 
