@@ -5,7 +5,7 @@
 
 ## Quick Preview
 
-![Multi Drive UI Banner](./images/banner.png)
+![Multi Drive UI Banner](./banner.png)
 
 ---
 
