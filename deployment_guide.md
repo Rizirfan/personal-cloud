@@ -57,12 +57,12 @@ Deploy your frontend as a static SPA on Vercel.
    
    | Key | Value |
    | --- | --- |
-   | `VITE_FIREBASE_PROJECT_ID` | `ytplayer-474fa` |
-   | `VITE_FIREBASE_AUTH_DOMAIN` | `ytplayer-474fa.firebaseapp.com` |
-   | `VITE_FIREBASE_STORAGE_BUCKET` | `ytplayer-474fa.firebasestorage.app` |
-   | `VITE_FIREBASE_API_KEY` | `AIzaSyAxuDeN76FpUiDKmF7Jnuwjr6FbR6rEePA` |
-   | `VITE_FIREBASE_MESSAGING_SENDER_ID` | `744407543292` |
-   | `VITE_FIREBASE_APP_ID` | `1:744407543292:android:3ea215b07faa38d7ac1679` |
+   | `VITE_FIREBASE_PROJECT_ID` 
+   | `VITE_FIREBASE_AUTH_DOMAIN` 
+   | `VITE_FIREBASE_STORAGE_BUCKET` 
+   | `VITE_FIREBASE_API_KEY` 
+   | `VITE_FIREBASE_MESSAGING_SENDER_ID` 
+   | `VITE_FIREBASE_APP_ID` 
 
 7. Click **Deploy**. Vercel will generate your frontend URL (e.g., `https://multi-drive.vercel.app`).
 
